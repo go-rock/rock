@@ -2,7 +2,6 @@ package rock
 
 import (
 	"net/http"
-	"reflect"
 	"sync"
 
 	"github.com/go-chi/chi"
@@ -17,29 +16,14 @@ type (
 		mux          *chi.Mux
 		pool         sync.Pool
 		render       Renderer
-		panicFunc    PanicHandler
+		// panicFunc    PanicHandler
 		notfoundFunc HandlerFunc
 
 		// add
 		contextFunc         ContextFunc
 		customHandlersFuncs customHandlers
 	}
-	HandlerFunc  func(*Context)
-	PanicHandler func(c *Context, rcv interface{})
 )
-
-type Handler interface{}
-
-// ContextFunc is the function to run when creating a new context
-type ContextFunc func(l *App) Context
-
-// CustomHandlerFunc wraped by HandlerFunc and called where you can type cast both Context and Handler
-// and call Handler
-type CustomHandlerFunc func(Context, Handler)
-
-// customHandlers is a map of your registered custom CustomHandlerFunc's
-// used in determining how to wrap them.
-type customHandlers map[reflect.Type]CustomHandlerFunc
 
 func GetPool() *pool.BufferPool {
 	return bufPool
@@ -53,7 +37,7 @@ func New() *App {
 	}
 	app.mux = chi.NewMux()
 	app.pool.New = func() interface{} {
-		c := &Context{}
+		c := &Ctx{}
 		c.index = -1
 		c.Writer = &c.writercache
 		return c
@@ -88,12 +72,4 @@ func (a *App) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 func (app *App) GetMux() *chi.Mux {
 	return app.mux
-}
-
-func (app *App) CreateContext(w http.ResponseWriter, r *http.Request) *Context {
-	return app.createContext(w, r)
-}
-
-func (app *App) ReleaseContext(c *Context) {
-	app.pool.Put(c)
 }

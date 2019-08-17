@@ -15,10 +15,10 @@ type logger struct {
 func Logger() HandlerFunc {
 	l := &logger{log.New(os.Stdout, "[rock] ", 0)}
 
-	return func(c *Context) {
+	return func(c Context) {
 		start := time.Now()
 		c.Next()
 
-		l.Printf("%s %s %v %s in %v", c.Request.Method, c.Request.URL.Path, c.Writer.Status(), http.StatusText(c.Writer.Status()), time.Since(start))
+		l.Printf("%s %s %v %s in %v", c.Request().Method, c.Request().URL.Path, c.Response().Status(), http.StatusText(c.Response().Status()), time.Since(start))
 	}
 }

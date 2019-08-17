@@ -2,19 +2,8 @@ package rock
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 )
-
-var defaultPanic = func(c *Context, rcv interface{}) {
-	stack := Stack()
-	log.Printf("PANIC: %s\n%s", rcv, stack)
-	c.String(500, "<pre>%s\n%s</pre>", rcv, stack)
-}
-
-var defaultNotfound = func(c *Context) {
-	c.String(404, "not found")
-}
 
 type Router struct {
 	handlers []HandlerFunc
@@ -79,9 +68,9 @@ func (r *Router) Group(path string, handlers ...HandlerFunc) *Router {
 }
 
 //Panic call when panic was called
-func (r *Router) Panic(h PanicHandler) {
-	r.app.panicFunc = h
-}
+// func (r *Router) Panic(h PanicHandler) {
+// 	r.app.panicFunc = h
+// }
 
 //RouteNotFound call when route does not match
 func (r *Router) RouteNotFound(h HandlerFunc) {
@@ -90,8 +79,8 @@ func (r *Router) RouteNotFound(h HandlerFunc) {
 
 //HandlerFunc convert http.HandlerFunc to ace.HandlerFunc
 func (r *Router) HTTPHandlerFunc(h http.HandlerFunc) HandlerFunc {
-	return func(c *Context) {
-		h(c.Writer, c.Request)
+	return func(c Context) {
+		h(c.Response(), c.Request())
 	}
 }
 
@@ -132,8 +121,8 @@ func (r *Router) Static(path string, root http.Dir, handlers ...HandlerFunc) {
 	path = r.path(path)
 	fileServer := http.StripPrefix(path, http.FileServer(root))
 
-	handlers = append(handlers, func(c *Context) {
-		fileServer.ServeHTTP(c.Writer, c.Request)
+	handlers = append(handlers, func(c Context) {
+		fileServer.ServeHTTP(c.Response(), c.Request())
 	})
 
 	p := r.staticPath(path)
