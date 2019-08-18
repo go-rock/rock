@@ -31,7 +31,11 @@ func GetPool() *pool.BufferPool {
 	return bufPool
 }
 func New() *App {
-	app := &App{}
+	app := &App{
+		contextFunc: func(l *App) Context {
+			return NewContext(l)
+		},
+	}
 	app.Router = &Router{
 		handlers: nil,
 		prefix:   "/",
@@ -43,7 +47,10 @@ func New() *App {
 		// c.index = -1
 		// c.response = &c.writercache
 		// return c
+		// pp.Println(app, "this is app")
 		c := app.contextFunc(app)
+		// c.response = &c.writercache
+
 		b := c.BaseContext()
 		b.index = -1
 		b.parent = c
@@ -75,13 +82,13 @@ func (app *App) Run(addr string) {
 //ServeHTTP implement http.Handler
 func (a *App) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// a.mux.ServeHTTP(w, req)
-	c := a.pool.Get().(Context)
-	c.RequestStart(w, req)
+	// c := a.pool.Get().(*Ctx)
+	// c.RequestStart(w, req)
 	// c.Next()
 	// c.parent.RequestEnd()
-	a.mux.ServeHTTP(c.Response(), c.Request())
+	a.mux.ServeHTTP(w, req)
 
-	a.pool.Put(c)
+	// a.pool.Put(c)
 }
 
 func (app *App) GetMux() *chi.Mux {

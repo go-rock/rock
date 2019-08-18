@@ -27,47 +27,47 @@ func (r *Router) GET(path string, handlers ...Handler) {
 	r.Handle("GET", path, handlers)
 }
 
-// //POST handle POST method
-// func (r *Router) POST(path string, handlers ...Handler) {
-// 	r.Handle("POST", path, handlers)
-// }
+//POST handle POST method
+func (r *Router) POST(path string, handlers ...Handler) {
+	r.Handle("POST", path, handlers)
+}
 
-// //PATCH handle PATCH method
-// func (r *Router) PATCH(path string, handlers ...Handler) {
-// 	r.Handle("PATCH", path, handlers)
-// }
+//PATCH handle PATCH method
+func (r *Router) PATCH(path string, handlers ...Handler) {
+	r.Handle("PATCH", path, handlers)
+}
 
-// //PUT handle PUT method
-// func (r *Router) PUT(path string, handlers ...Handler) {
-// 	r.Handle("PUT", path, handlers)
-// }
+//PUT handle PUT method
+func (r *Router) PUT(path string, handlers ...Handler) {
+	r.Handle("PUT", path, handlers)
+}
 
-// //DELETE handle DELETE method
-// func (r *Router) DELETE(path string, handlers ...Handler) {
-// 	r.Handle("DELETE", path, handlers)
-// }
+//DELETE handle DELETE method
+func (r *Router) DELETE(path string, handlers ...Handler) {
+	r.Handle("DELETE", path, handlers)
+}
 
-// //HEAD handle HEAD method
-// func (r *Router) HEAD(path string, handlers ...Handler) {
-// 	r.Handle("HEAD", path, handlers)
-// }
+//HEAD handle HEAD method
+func (r *Router) HEAD(path string, handlers ...Handler) {
+	r.Handle("HEAD", path, handlers)
+}
 
-// //OPTIONS handle OPTIONS method
-// func (r *Router) OPTIONS(path string, handlers ...Handler) {
-// 	r.Handle("OPTIONS", path, handlers)
-// }
+//OPTIONS handle OPTIONS method
+func (r *Router) OPTIONS(path string, handlers ...Handler) {
+	r.Handle("OPTIONS", path, handlers)
+}
 
-// //Group group route
-// func (r *Router) Group(path string, handlers ...Handler) *Router {
-// 	handlers = r.combineHandlers(handlers)
-// 	return &Router{
-// 		handlers: handlers,
-// 		prefix:   r.path(path),
-// 		app:      r.app,
-// 	}
-// }
+//Group group route
+func (r *Router) Group(path string, handlers ...Handler) *Router {
+	hs := r.combineHandlers(handlers)
+	return &Router{
+		handlers: hs,
+		prefix:   r.path(path),
+		app:      r.app,
+	}
+}
 
-//Panic call when panic was called
+// Panic call when panic was called
 // func (r *Router) Panic(h PanicHandler) {
 // 	r.app.panicFunc = h
 // }

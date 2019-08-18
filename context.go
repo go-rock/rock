@@ -33,21 +33,23 @@ func (c *Ctx) Response() *Response {
 }
 
 //Next next middleware
-// func (c *Ctx) Next() {
-// 	c.index++
-// 	s := int(len(c.handlers))
-// 	if c.index < s {
-// 		c.handlers[c.index](c)
-// 	}
-// }
+func (c *Ctx) Next() {
+	c.index++
+	s := int(len(c.handlers))
+	if c.index < s {
+		// pp.Println(s, c)
+		c.handlers[c.index](c.parent)
+		// c.handlers[c.index](c.parent)
+	}
+}
 
 // Next should be used only inside middleware.
 // It executes the pending handlers in the chain inside the calling handler.
 // See example in github.
-func (c *Ctx) Next() {
-	c.index++
-	c.handlers[c.index](c.parent)
-}
+// func (c *Ctx) Next() {
+// 	c.index++
+// 	c.handlers[c.index](c.parent)
+// }
 
 // BaseContext returns the underlying context object LARS uses internally.
 // used when overriding the context object
