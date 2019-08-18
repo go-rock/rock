@@ -23,49 +23,49 @@ func (r *Router) Use(middlewares ...HandlerFunc) {
 }
 
 //GET handle GET method
-func (r *Router) GET(path string, handlers ...HandlerFunc) {
+func (r *Router) GET(path string, handlers ...Handler) {
 	r.Handle("GET", path, handlers)
 }
 
-//POST handle POST method
-func (r *Router) POST(path string, handlers ...HandlerFunc) {
-	r.Handle("POST", path, handlers)
-}
+// //POST handle POST method
+// func (r *Router) POST(path string, handlers ...Handler) {
+// 	r.Handle("POST", path, handlers)
+// }
 
-//PATCH handle PATCH method
-func (r *Router) PATCH(path string, handlers ...HandlerFunc) {
-	r.Handle("PATCH", path, handlers)
-}
+// //PATCH handle PATCH method
+// func (r *Router) PATCH(path string, handlers ...Handler) {
+// 	r.Handle("PATCH", path, handlers)
+// }
 
-//PUT handle PUT method
-func (r *Router) PUT(path string, handlers ...HandlerFunc) {
-	r.Handle("PUT", path, handlers)
-}
+// //PUT handle PUT method
+// func (r *Router) PUT(path string, handlers ...Handler) {
+// 	r.Handle("PUT", path, handlers)
+// }
 
-//DELETE handle DELETE method
-func (r *Router) DELETE(path string, handlers ...HandlerFunc) {
-	r.Handle("DELETE", path, handlers)
-}
+// //DELETE handle DELETE method
+// func (r *Router) DELETE(path string, handlers ...Handler) {
+// 	r.Handle("DELETE", path, handlers)
+// }
 
-//HEAD handle HEAD method
-func (r *Router) HEAD(path string, handlers ...HandlerFunc) {
-	r.Handle("HEAD", path, handlers)
-}
+// //HEAD handle HEAD method
+// func (r *Router) HEAD(path string, handlers ...Handler) {
+// 	r.Handle("HEAD", path, handlers)
+// }
 
-//OPTIONS handle OPTIONS method
-func (r *Router) OPTIONS(path string, handlers ...HandlerFunc) {
-	r.Handle("OPTIONS", path, handlers)
-}
+// //OPTIONS handle OPTIONS method
+// func (r *Router) OPTIONS(path string, handlers ...Handler) {
+// 	r.Handle("OPTIONS", path, handlers)
+// }
 
-//Group group route
-func (r *Router) Group(path string, handlers ...HandlerFunc) *Router {
-	handlers = r.combineHandlers(handlers)
-	return &Router{
-		handlers: handlers,
-		prefix:   r.path(path),
-		app:      r.app,
-	}
-}
+// //Group group route
+// func (r *Router) Group(path string, handlers ...Handler) *Router {
+// 	handlers = r.combineHandlers(handlers)
+// 	return &Router{
+// 		handlers: handlers,
+// 		prefix:   r.path(path),
+// 		app:      r.app,
+// 	}
+// }
 
 //Panic call when panic was called
 // func (r *Router) Panic(h PanicHandler) {
@@ -84,13 +84,13 @@ func (r *Router) HTTPHandlerFunc(h http.HandlerFunc) HandlerFunc {
 	}
 }
 
-func (r *Router) combineHandlers(handlers []HandlerFunc) []HandlerFunc {
+func (r *Router) combineHandlers(handlers []Handler) []HandlerFunc {
 	aLen := len(r.handlers)
 	hLen := len(handlers)
 	h := make([]HandlerFunc, aLen+hLen)
 	copy(h, r.handlers)
 	for i := 0; i < hLen; i++ {
-		h[aLen+i] = handlers[i]
+		h[aLen+i] = r.app.wrapHandler(handlers[i])
 	}
 	return h
 }
@@ -104,11 +104,14 @@ func (r *Router) path(p string) string {
 }
 
 //Handle handle with specific method
-func (r *Router) Handle(method, path string, handlers []HandlerFunc) {
-	handlers = r.combineHandlers(handlers)
+func (r *Router) Handle(method, path string, handlers []Handler) {
+	hs := r.combineHandlers(handlers)
 	r.app.mux.MethodFunc(method, r.path(path), func(w http.ResponseWriter, req *http.Request) {
-		c := r.app.createContext(w, req)
-		c.handlers = handlers
+		// c := r.app.createContext(w, req)
+		c := r.app.pool.Get().(Context)
+		c.RequestStart(w, req)
+		// c.handlers = hs
+		c.SetHandlers(hs)
 		c.Next()
 		r.app.pool.Put(c)
 	})
@@ -128,9 +131,13 @@ func (r *Router) Static(path string, root http.Dir, handlers ...HandlerFunc) {
 	p := r.staticPath(path)
 	fmt.Println(p)
 	r.app.mux.MethodFunc("GET", p, func(w http.ResponseWriter, req *http.Request) {
-		c := r.app.createContext(w, req)
+		// c := r.app.createContext(w, req)
+		c := r.app.pool.Get().(Context)
+		c.RequestStart(w, req)
+		// c.handlers = hs
+		c.SetHandlers(handlers)
 		fmt.Println("stat")
-		c.handlers = handlers
+		// c.handlers = handlers
 		c.Next()
 		r.app.pool.Put(c)
 	})

@@ -38,8 +38,8 @@ func (a *App) createContext(w http.ResponseWriter, r *http.Request) *Ctx {
 
 //String response with text/html; charset=UTF-8 Content type
 func (c *Ctx) String(status int, format string, val ...interface{}) {
-	c.Writer.Header().Set(contentType, "text/html; charset=UTF-8")
-	c.Writer.WriteHeader(status)
+	c.response.Header().Set(contentType, "text/html; charset=UTF-8")
+	c.response.WriteHeader(status)
 
 	buf := bufPool.Get()
 	defer bufPool.Put(buf)
@@ -50,7 +50,7 @@ func (c *Ctx) String(status int, format string, val ...interface{}) {
 		buf.WriteString(fmt.Sprintf(format, val...))
 	}
 
-	c.Writer.Write(buf.Bytes())
+	c.response.Write(buf.Bytes())
 }
 
 //HTML render template engine
@@ -61,3 +61,7 @@ func (c *Ctx) String(status int, format string, val ...interface{}) {
 // 		c.render.Render(c.Writer, name, data)
 // 	}
 // }
+
+func (c *Ctx) SetHandlers(handlers []HandlerFunc) {
+	c.handlers = handlers
+}
