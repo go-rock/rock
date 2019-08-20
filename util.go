@@ -4,7 +4,8 @@ import (
 	"net/http"
 	"reflect"
 	"runtime"
-
+	"mime"
+	"path/filepath"
 	"github.com/k0kubun/pp"
 )
 
@@ -14,6 +15,14 @@ import (
 // chaining.
 func GetContext(w http.ResponseWriter) Context {
 	return w.(*Response).context
+}
+
+
+func detectContentType(filename string) (t string) {
+	if t = mime.TypeByExtension(filepath.Ext(filename)); t == "" {
+		t = OctetStream
+	}
+	return
 }
 
 var NativeChainHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

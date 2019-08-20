@@ -1,7 +1,6 @@
 package rock
 
 import (
-	"fmt"
 	"net/http"
 )
 
@@ -108,7 +107,7 @@ func (r *Router) Handle(method, path string, handlers []Handler) {
 	hs := r.combineHandlers(handlers)
 	r.app.mux.MethodFunc(method, r.path(path), func(w http.ResponseWriter, req *http.Request) {
 		// c := r.app.createContext(w, req)
-		c := r.app.pool.Get().(Context)
+		c := r.app.pool.Get().(*Ctx)
 		c.RequestStart(w, req)
 		// c.handlers = hs
 		c.SetHandlers(hs)
@@ -129,14 +128,12 @@ func (r *Router) Static(path string, root http.Dir, handlers ...HandlerFunc) {
 	})
 
 	p := r.staticPath(path)
-	fmt.Println(p)
 	r.app.mux.MethodFunc("GET", p, func(w http.ResponseWriter, req *http.Request) {
 		// c := r.app.createContext(w, req)
-		c := r.app.pool.Get().(Context)
+		c := r.app.pool.Get().(*Ctx)
 		c.RequestStart(w, req)
 		// c.handlers = hs
 		c.SetHandlers(handlers)
-		fmt.Println("stat")
 		// c.handlers = handlers
 		c.Next()
 		r.app.pool.Put(c)
