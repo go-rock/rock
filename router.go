@@ -15,45 +15,45 @@ func (r *Router) Mount(prefix string, handler http.Handler) {
 }
 
 //Use register middleware
-func (r *Router) Use(middlewares ...HandlerFunc) {
+func (r *Router) Use(middlewares ...Handler) {
 	for _, handler := range middlewares {
-		r.handlers = append(r.handlers, handler)
+		r.handlers = append(r.handlers, r.app.wrapHandler(handler))
 	}
 }
 
 //GET handle GET method
 func (r *Router) GET(path string, handlers ...Handler) {
-	r.Handle("GET", path, handlers)
+	r.Handle(GET, path, handlers)
 }
 
 //POST handle POST method
 func (r *Router) POST(path string, handlers ...Handler) {
-	r.Handle("POST", path, handlers)
+	r.Handle(POST, path, handlers)
 }
 
 //PATCH handle PATCH method
 func (r *Router) PATCH(path string, handlers ...Handler) {
-	r.Handle("PATCH", path, handlers)
+	r.Handle(PATCH, path, handlers)
 }
 
 //PUT handle PUT method
 func (r *Router) PUT(path string, handlers ...Handler) {
-	r.Handle("PUT", path, handlers)
+	r.Handle(PUT, path, handlers)
 }
 
 //DELETE handle DELETE method
 func (r *Router) DELETE(path string, handlers ...Handler) {
-	r.Handle("DELETE", path, handlers)
+	r.Handle(DELETE, path, handlers)
 }
 
 //HEAD handle HEAD method
 func (r *Router) HEAD(path string, handlers ...Handler) {
-	r.Handle("HEAD", path, handlers)
+	r.Handle(HEAD, path, handlers)
 }
 
 //OPTIONS handle OPTIONS method
 func (r *Router) OPTIONS(path string, handlers ...Handler) {
-	r.Handle("OPTIONS", path, handlers)
+	r.Handle(OPTIONS, path, handlers)
 }
 
 //Group group route
@@ -132,6 +132,7 @@ func (r *Router) Static(path string, root http.Dir, handlers ...HandlerFunc) {
 		// c := r.app.createContext(w, req)
 		c := r.app.pool.Get().(*Ctx)
 		c.RequestStart(w, req)
+
 		// c.handlers = hs
 		c.SetHandlers(handlers)
 		// c.handlers = handlers
@@ -146,4 +147,21 @@ func (r *Router) staticPath(p string) string {
 	}
 
 	return concat(p, "/*")
+}
+
+func (app *App) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	// app.mux.ServeHTTP(w, req)
+	// c := &Context{mux.rock, w, r, make(map[string]interface{}), bpool.NewBufferPool(48)}
+	c := app.pool.Get().(*Ctx)
+	c.RequestStart(w, req)
+	// c.handlers = hs
+	// // c.handlers =
+	// pp.Println("start")
+	c.Next()
+	// pp.Println(len(c.handlers))
+	app.mux.ServeHTTP(c.response, c.request)
+
+	// pp.Println("end")
+	// // c.response.Write([]byte("xiao"))
+	app.pool.Put(c)
 }

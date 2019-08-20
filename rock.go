@@ -6,8 +6,9 @@ import (
 	"net/http"
 	"reflect"
 	"sync"
-	"github.com/go-playground/form"
+
 	"github.com/go-chi/chi"
+	"github.com/go-playground/form"
 	"github.com/plimble/utils/pool"
 )
 
@@ -89,16 +90,18 @@ func (app *App) Run(addr string) {
 }
 
 //ServeHTTP implement http.Handler
-func (a *App) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	// a.mux.ServeHTTP(w, req)
-	// c := a.pool.Get().(*Ctx)
-	// c.RequestStart(w, req)
-	// c.Next()
-	// c.parent.RequestEnd()
-	a.mux.ServeHTTP(w, req)
+// func (a *App) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+// 	// a.mux.ServeHTTP(w, req)
+// 	c := a.pool.Get().(*Ctx)
+// 	// c := NewContext(a)
+// 	c.RequestStart(w, req)
+// 	pp.Println(c)
+// 	// c.Next()
+// 	// c.parent.RequestEnd()
+// 	// a.mux.ServeHTTP(c.response, c.request)
 
-	// a.pool.Put(c)
-}
+// 	// a.pool.Put(c)
+// }
 
 func (app *App) GetMux() *chi.Mux {
 	return app.mux
@@ -125,7 +128,6 @@ func (l *App) RegisterCustomHandler(customType interface{}, fn CustomHandlerFunc
 func (l *App) RegisterContext(fn ContextFunc) {
 	l.contextFunc = fn
 }
-
 
 func initFormDecoder() {
 	formDecoderInit.Do(func() {

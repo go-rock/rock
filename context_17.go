@@ -35,8 +35,11 @@ type Context interface {
 	Decode(includeFormQueryParams bool, maxMemory int64, v interface{}) (err error)
 	BaseContext() *Ctx
 	RequestStart(w http.ResponseWriter, r *http.Request)
-	SetHandlers([]HandlerFunc)
 	String(int, string, ...interface{})
 
-	// RequestEnd()
+	// Custom
+	SetHandlers([]HandlerFunc)
+	Data() M
+	Set(key string, value interface{})
+	Get(key string) (interface{}, bool)
 }

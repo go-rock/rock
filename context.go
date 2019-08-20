@@ -359,3 +359,21 @@ func (c *Ctx) Decode(includeFormQueryParams bool, maxMemory int64, v interface{}
 	}
 	return
 }
+
+// Context data
+
+func (c *Ctx) Data() M {
+	return c.data
+}
+
+func (c *Ctx) Set(key string, value interface{}) {
+	if c.data == nil {
+		c.data = make(map[string]interface{})
+	}
+	c.data[key] = value
+}
+
+func (c *Ctx) Get(key string) (value interface{}, exists bool) {
+	value, exists = c.data[key]
+	return
+}

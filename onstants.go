@@ -71,12 +71,5 @@ const (
 
 	Gzip = "gzip"
 
-	WildcardParam = "*wildcard"
-
-	basePath = "/"
-	blank    = ""
-
-	slashByte = '/'
-	paramByte = ':'
-	wildByte  = '*'
+	blank = ""
 )
