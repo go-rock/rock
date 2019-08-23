@@ -42,4 +42,15 @@ type Context interface {
 	Data() M
 	Set(key string, value interface{})
 	Get(key string) (interface{}, bool)
+
+	Abort()
+	AbortWithStatus(code int)
+	AbortWithStatusJSON(code int, jsonObj interface{})
+	Redirect(url string)
+
+	// Render
+	HTMLRender(HTMLRender)
+	Render(code int, r Render)
+	Status(code int)
+	HTML(string, ...int)
 }

@@ -21,7 +21,7 @@ type Ctx2 struct {
 	index       int8
 	handlers    []HandlerFunc
 	data        map[string]interface{}
-	render      Renderer
+	render      Render
 	sessions    *sessions.Sessions
 }
 
@@ -64,4 +64,29 @@ func (c *Ctx) String(status int, format string, val ...interface{}) {
 
 func (c *Ctx) SetHandlers(handlers []HandlerFunc) {
 	c.handlers = handlers
+}
+
+func (c *Ctx) Redirect(url string) {
+	c.response.Header().Set("Location", url)
+	c.response.WriteHeader(http.StatusFound)
+	c.response.Write([]byte("Redirecting to: " + url))
+}
+
+func (c *Ctx) Abort() {
+	c.index = abortIndex
+}
+
+// AbortWithStatus calls `Abort()` and writes the headers with the specified status code.
+// For example, a failed attempt to authenticate a request could use: context.AbortWithStatus(401).
+func (c *Ctx) AbortWithStatus(code int) {
+	c.response.WriteHeader(code)
+	c.Abort()
+}
+
+// AbortWithStatusJSON calls `Abort()` and then `JSON` internally.
+// This method stops the chain, writes the status code and return a JSON body.
+// It also sets the Content-Type as "application/json".
+func (c *Ctx) AbortWithStatusJSON(code int, jsonObj interface{}) {
+	c.Abort()
+	c.JSON(code, jsonObj)
 }

@@ -14,6 +14,18 @@ func (r *Router) Mount(prefix string, handler http.Handler) {
 	r.app.mux.Mount(prefix, handler)
 }
 
+// func (r *Router) wrapHandlerFunc(handler Handler, prefix string) http.Handler {
+// 	switch handler.(type) {
+// 	case http.Handler:
+// 		return handler.(http.Handler)
+// 	case func(w http.ResponseWriter, r *http.Request):
+// 		return http.HandlerFunc(handler.(func(w http.ResponseWriter, r *http.Request)))
+// 	default:
+// 		pp.Println(handler)
+// 		panic("invalid handlerfunc mount")
+// 	}
+// }
+
 //Use register middleware
 func (r *Router) Use(middlewares ...Handler) {
 	for _, handler := range middlewares {
@@ -105,6 +117,7 @@ func (r *Router) path(p string) string {
 //Handle handle with specific method
 func (r *Router) Handle(method, path string, handlers []Handler) {
 	hs := r.combineHandlers(handlers)
+	r.app.debugPrintRoute(method, r.path(path), handlers)
 	r.app.mux.MethodFunc(method, r.path(path), func(w http.ResponseWriter, req *http.Request) {
 		// c := r.app.createContext(w, req)
 		c := r.app.pool.Get().(*Ctx)
@@ -132,7 +145,7 @@ func (r *Router) Static(path string, root http.Dir, handlers ...HandlerFunc) {
 		// c := r.app.createContext(w, req)
 		c := r.app.pool.Get().(*Ctx)
 		c.RequestStart(w, req)
-
+		c.HTMLRender(r.app.render)
 		// c.handlers = hs
 		c.SetHandlers(handlers)
 		// c.handlers = handlers
@@ -152,16 +165,17 @@ func (r *Router) staticPath(p string) string {
 func (app *App) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// app.mux.ServeHTTP(w, req)
 	// c := &Context{mux.rock, w, r, make(map[string]interface{}), bpool.NewBufferPool(48)}
-	c := app.pool.Get().(*Ctx)
-	c.RequestStart(w, req)
+	// c := app.pool.Get().(*Ctx)
+	// c.RequestStart(w, req)
+	// c.HTMLRender(app.render)
+
 	// c.handlers = hs
 	// // c.handlers =
-	// pp.Println("start")
-	c.Next()
+	// c.Next()
 	// pp.Println(len(c.handlers))
-	app.mux.ServeHTTP(c.response, c.request)
+	app.mux.ServeHTTP(w, req)
 
 	// pp.Println("end")
 	// // c.response.Write([]byte("xiao"))
-	app.pool.Put(c)
+	// app.pool.Put(c)
 }

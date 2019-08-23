@@ -24,7 +24,7 @@ type (
 		*Router
 		mux    *chi.Mux
 		pool   sync.Pool
-		render Renderer
+		render HTMLRender
 		// panicFunc    PanicHandler
 		notfoundFunc HandlerFunc
 
@@ -36,6 +36,14 @@ type (
 
 func GetPool() *pool.BufferPool {
 	return bufPool
+}
+
+func (app *App) NewRouter(path string) *Router {
+	return &Router{
+		handlers: nil,
+		prefix:   path,
+		app:      app,
+	}
 }
 func New() *App {
 	app := &App{
@@ -61,6 +69,7 @@ func New() *App {
 		b := c.BaseContext()
 		b.index = -1
 		b.parent = c
+		b.render = app.render
 		return b
 	}
 
@@ -73,11 +82,11 @@ func Default() *App {
 	return a
 }
 
-func DefaultWithout() *App {
-	a := New()
-	a.Use(Logger())
-	return a
-}
+// func DefaultWithout() *App {
+// 	a := New("/")
+// 	a.Use(Logger())
+// 	return a
+// }
 
 //Run server with specific address and port
 func (app *App) Run(addr string) {

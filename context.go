@@ -21,7 +21,7 @@ type Ctx struct {
 	index               int
 	handlers            []HandlerFunc
 	data                map[string]interface{}
-	render              Renderer
+	render              HTMLRender
 	formParsed          bool
 	multipartFormParsed bool
 }
@@ -104,10 +104,14 @@ func (c *Ctx) ParseMultipartForm(maxMemory int64) error {
 // It executes the pending handlers in the chain inside the calling handler.
 func (c *Ctx) Next() {
 	c.index++
-	s := int(len(c.handlers))
-	if c.index < s {
+	for c.index < len(c.handlers) {
 		c.handlers[c.index](c.parent)
+		c.index++
 	}
+	// s := int(len(c.handlers))
+	// if c.index < s {
+	// 	c.handlers[c.index](c.parent)
+	// }
 }
 
 // Params returns the url param by name.
@@ -376,4 +380,10 @@ func (c *Ctx) Set(key string, value interface{}) {
 func (c *Ctx) Get(key string) (value interface{}, exists bool) {
 	value, exists = c.data[key]
 	return
+}
+
+// Render
+
+func (c *Ctx) HTMLRender(render HTMLRender) {
+	c.render = render
 }

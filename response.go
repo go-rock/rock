@@ -61,6 +61,17 @@ func (r *Response) WriteHeader(code int) {
 	r.committed = true
 }
 
+func (w *Response) Written() bool {
+	return w.size != noWritten
+}
+
+func (w *Response) WriteHeaderNow() {
+	if !w.Written() {
+		w.size = 0
+		w.ResponseWriter.WriteHeader(w.status)
+	}
+}
+
 // Write writes the data to the connection as part of an HTTP reply.
 // If WriteHeader has not yet been called, Write calls WriteHeader(http.StatusOK)
 // before writing the data.  If the Header does not contain a
