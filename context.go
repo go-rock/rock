@@ -323,7 +323,21 @@ func (c *Ctx) Inline(r io.Reader, filename string) (err error) {
 // the http headers and then decode the request body into the provided struct.
 // Example if header was "application/json" would decode using
 // json.NewDecoder(io.LimitReader(c.request.Body, maxMemory)).Decode(v).
-func (c *Ctx) Decode(includeFormQueryParams bool, maxMemory int64, v interface{}) (err error) {
+func (c *Ctx) Decode(v interface{}, args ...interface{}) (err error) {
+	var maxMemory int64 = 10000
+	var includeFormQueryParams bool = false
+	if len(args) > 0 {
+		result, ok := args[0].(bool)
+		if ok {
+			includeFormQueryParams = result
+		}
+	}
+	if len(args) > 1 {
+		result, ok := args[1].(int)
+		if ok {
+			maxMemory = int64(result)
+		}
+	}
 
 	initFormDecoder()
 

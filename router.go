@@ -132,7 +132,7 @@ func (r *Router) Handle(method, path string, handlers []Handler) {
 //Static server static file
 //path is url path
 //root is root directory
-func (r *Router) Static(path string, root http.Dir, handlers ...HandlerFunc) {
+func (r *Router) Static(path string, root http.FileSystem, handlers ...HandlerFunc) {
 	path = r.path(path)
 	fileServer := http.StripPrefix(path, http.FileServer(root))
 

@@ -17,7 +17,8 @@ func NewContext(l *App) *Ctx {
 func (c *Ctx) RequestStart(w http.ResponseWriter, r *http.Request) {
 	c.request = r
 	c.response.reset(w)
-	// c.params = c.params[0:0]
+	// c.data = map[string]interface{}{}
+	c.data = nil
 	c.queryParams = nil
 	c.index = -1
 	c.handlers = nil

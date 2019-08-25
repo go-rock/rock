@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"math"
 	"net/http"
-
-	"github.com/plimble/sessions"
 )
 
 const (
@@ -22,7 +20,7 @@ type Ctx2 struct {
 	handlers    []HandlerFunc
 	data        map[string]interface{}
 	render      Render
-	sessions    *sessions.Sessions
+	// sessions    *sessions.Sessions
 }
 
 func (a *App) createContext(w http.ResponseWriter, r *http.Request) *Ctx {

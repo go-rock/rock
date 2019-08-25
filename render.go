@@ -22,7 +22,7 @@ type HTMLRender interface {
 	Instance(string, interface{}) Render
 }
 type Render interface {
-	Render(w http.ResponseWriter)
+	Render(w http.ResponseWriter, statusCode int)
 }
 
 //HtmlTemplate use html template middleware
@@ -60,9 +60,9 @@ func (ctx *Ctx) Status(status int) {
 }
 
 // Render writes the response headers and calls render.Render to render data.
-func (c *Ctx) Render(code int, r Render) {
-	c.Status(code)
-	r.Render(c.response)
+func (c *Ctx) Render(statusCode int, r Render) {
+	// c.Status(code)
+	r.Render(c.response, statusCode)
 
 	// if !bodyAllowedForStatus(code) {
 	// 	r.WriteContentType(c.Writer)

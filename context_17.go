@@ -32,7 +32,8 @@ type Context interface {
 	TextBytes(int, []byte) error
 	Attachment(r io.Reader, filename string) (err error)
 	Inline(r io.Reader, filename string) (err error)
-	Decode(includeFormQueryParams bool, maxMemory int64, v interface{}) (err error)
+	// Decode(includeFormQueryParams bool, maxMemory int64, v interface{}) (err error)
+	Decode(v interface{}, args ...interface{}) (err error)
 	BaseContext() *Ctx
 	RequestStart(w http.ResponseWriter, r *http.Request)
 	String(int, string, ...interface{})
