@@ -6,8 +6,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
-
-	"github.com/k0kubun/pp"
 )
 
 // GetContext is a helper method for retrieving the Context object from
@@ -100,7 +98,6 @@ func (l *App) wrapHandler(h Handler) HandlerFunc {
 			}
 		}
 
-		pp.Println(h)
 		panic("unknown handler")
 	}
 }

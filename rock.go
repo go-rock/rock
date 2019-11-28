@@ -112,7 +112,7 @@ func (app *App) Run(addr string) {
 // 	// a.pool.Put(c)
 // }
 
-func (app *App) GetMux() *chi.Mux {
+func (app *App) Mux() *chi.Mux {
 	return app.mux
 }
 

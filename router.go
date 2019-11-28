@@ -117,7 +117,7 @@ func (r *Router) path(p string) string {
 //Handle handle with specific method
 func (r *Router) Handle(method, path string, handlers []Handler) {
 	hs := r.combineHandlers(handlers)
-	r.app.debugPrintRoute(method, r.path(path), handlers)
+	// r.app.debugPrintRoute(method, r.path(path), handlers)
 	r.app.mux.MethodFunc(method, r.path(path), func(w http.ResponseWriter, req *http.Request) {
 		// c := r.app.createContext(w, req)
 		c := r.app.pool.Get().(*Ctx)

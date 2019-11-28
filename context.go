@@ -3,13 +3,23 @@ package rock
 import (
 	"encoding/json"
 	"encoding/xml"
+	"fmt"
 	"io"
+	"math"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi"
+)
+
+const (
+	contentType    = "Content-Type"
+	acceptLanguage = "Accept-Language"
+	abortIndex     = math.MaxInt8 / 2
 )
 
 type Ctx struct {
@@ -37,6 +47,115 @@ func (c *Ctx) Request() *http.Request {
 }
 func (c *Ctx) Response() *Response {
 	return c.response
+}
+
+// NewContext returns a new default lars Context object.
+func NewContext(l *App) *Ctx {
+
+	c := &Ctx{}
+
+	c.response = newResponse(nil, c)
+	return c
+}
+
+// RequestStart resets the Context to it's default request state
+func (c *Ctx) RequestStart(w http.ResponseWriter, r *http.Request) {
+	c.request = r
+	c.response.reset(w)
+	// c.data = map[string]interface{}{}
+	c.data = nil
+	c.queryParams = nil
+	c.index = -1
+	c.handlers = nil
+	c.formParsed = false
+	c.multipartFormParsed = false
+}
+
+func (a *App) createContext(w http.ResponseWriter, r *http.Request) *Ctx {
+	c := a.pool.Get().(*Ctx)
+	c.writercache.reset(w)
+	c.request = r
+	c.index = -1
+	c.data = nil
+	c.render = a.render
+
+	return c
+}
+
+//String response with text/html; charset=UTF-8 Content type
+func (c *Ctx) String(status int, format string, val ...interface{}) {
+	c.response.Header().Set(contentType, "text/html; charset=UTF-8")
+	c.response.WriteHeader(status)
+
+	buf := bufPool.Get()
+	defer bufPool.Put(buf)
+
+	if len(val) == 0 {
+		buf.WriteString(format)
+	} else {
+		buf.WriteString(fmt.Sprintf(format, val...))
+	}
+
+	c.response.Write(buf.Bytes())
+}
+
+//HTML render template engine
+// func (c *Ctx) HTML(name string, data interface{}) {
+// 	if c.render == nil {
+// 		c.String(200, "Not implement render")
+// 	} else {
+// 		c.render.Render(c.Writer, name, data)
+// 	}
+// }
+
+func (c *Ctx) SetHandlers(handlers []HandlerFunc) {
+	c.handlers = handlers
+}
+
+func (c *Ctx) Redirect(url string) {
+	c.response.Header().Set("Location", url)
+	c.response.WriteHeader(http.StatusFound)
+	c.response.Write([]byte("Redirecting to: " + url))
+}
+
+func (c *Ctx) Abort() {
+	c.index = abortIndex
+}
+
+// AbortWithStatus calls `Abort()` and writes the headers with the specified status code.
+// For example, a failed attempt to authenticate a request could use: context.AbortWithStatus(401).
+func (c *Ctx) AbortWithStatus(code int) {
+	c.response.WriteHeader(code)
+	c.Abort()
+}
+
+// AbortWithStatusJSON calls `Abort()` and then `JSON` internally.
+// This method stops the chain, writes the status code and return a JSON body.
+// It also sets the Content-Type as "application/json".
+func (c *Ctx) AbortWithStatusJSON(code int, jsonObj interface{}) {
+	c.Abort()
+	c.JSON(code, jsonObj)
+}
+
+func (c *Ctx) GetQuery(name string) (string, bool) {
+	if val := c.QueryParams().Get(name); val != "" {
+		return val, true
+	} else {
+		return "", false
+	}
+}
+
+func (c *Ctx) MustQueryInt(name string, d int) int {
+	val, bool := c.GetQuery(name)
+	if !bool {
+		return d
+	}
+	i, err := strconv.Atoi(val)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	return i
 }
 
 // QueryParams returns the http.Request.URL.Query() values
@@ -122,6 +241,19 @@ func (c *Ctx) Param(name string) string {
 func (c *Ctx) params() chi.RouteParams {
 	params := chi.RouteContext(c.request.Context()).URLParams
 	return params
+}
+
+func (c *Ctx) MustParamInt(name string, d int) int {
+	val := c.Param(name)
+	if val == "" {
+		return d
+	}
+	i, err := strconv.Atoi(val)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	return i
 }
 
 // http response helpers
@@ -384,6 +516,11 @@ func (c *Ctx) Data() M {
 	return c.data
 }
 
+// set all data
+func (c *Ctx) SetData(data M) {
+	c.data = data
+}
+
 func (c *Ctx) Set(key string, value interface{}) {
 	if c.data == nil {
 		c.data = make(map[string]interface{})
@@ -400,4 +537,74 @@ func (c *Ctx) Get(key string) (value interface{}, exists bool) {
 
 func (c *Ctx) HTMLRender(render HTMLRender) {
 	c.render = render
+}
+
+// form params
+
+/////////////////////////
+
+func (c *Ctx) MustPostInt(key string, d int) int {
+	val := c.Request().PostFormValue(key)
+	if val == "" {
+		return d
+	}
+	i, err := strconv.Atoi(val)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	return i
+}
+
+// func (c *Ctx) MustPostFloat64(key string, d float64) float64 {
+// 	val := c.Request().PostFormValue(key)
+// 	if val == "" {
+// 		return d
+// 	}
+// 	f, err := strconv.ParseFloat(c.Request().URL.Query().Get(key), 64)
+// 	if err != nil {
+// 		panic(err)
+// 	}
+
+// 	return f
+// }
+
+func (c *Ctx) MustPostString(key, d string) string {
+	val := c.Request().PostFormValue(key)
+	if val == "" {
+		return d
+	}
+
+	return val
+}
+
+// func (c *Ctx) MustPostStrings(key string, d []string) []string {
+// 	if c.Request().PostForm == nil {
+// 		c.Request().ParseForm()
+// 	}
+
+// 	val := c.Request().PostForm[key]
+// 	if len(val) == 0 {
+// 		return d
+// 	}
+
+// 	return val
+// }
+
+// func (c *Ctx) MustPostTime(key string, layout string, d time.Time) time.Time {
+// 	val := c.Request().PostFormValue(key)
+// 	if val == "" {
+// 		return d
+// 	}
+// 	t, err := time.Parse(layout, c.Request().URL.Query().Get(key))
+// 	if err != nil {
+// 		panic(err)
+// 	}
+
+// 	return t
+// }
+
+func (c *Ctx) FormFile(name string) (*multipart.FileHeader, error) {
+	_, fh, err := c.request.FormFile(name)
+	return fh, err
 }

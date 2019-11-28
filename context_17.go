@@ -4,6 +4,7 @@ package rock
 
 import (
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 
@@ -14,6 +15,7 @@ import (
 type Context interface {
 	Request() *http.Request
 	Response() *Response
+	GetQuery(name string) (string, bool)
 	params() chi.RouteParams
 	Param(name string) string
 	QueryParams() url.Values
@@ -41,6 +43,7 @@ type Context interface {
 	// Custom
 	SetHandlers([]HandlerFunc)
 	Data() M
+	SetData(M)
 	Set(key string, value interface{})
 	Get(key string) (interface{}, bool)
 
@@ -54,4 +57,15 @@ type Context interface {
 	Render(code int, r Render)
 	Status(code int)
 	HTML(string, ...int)
+
+	// Post body
+
+	MustPostInt(key string, d int) int
+	MustPostString(key string, d string) string
+
+	MustParamInt(name string, d int) int
+
+	MustQueryInt(name string, d int) int
+
+	FormFile(name string) (*multipart.FileHeader, error)
 }
