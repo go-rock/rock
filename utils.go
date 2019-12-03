@@ -50,7 +50,7 @@ func (l *App) wrapHandler(h Handler) HandlerFunc {
 
 			ctx := c.BaseContext()
 
-			if h.(http.Handler).ServeHTTP(ctx.response, ctx.request); ctx.response.status != http.StatusOK || ctx.response.committed {
+			if h.(http.Handler).ServeHTTP(ctx.response, ctx.request); ctx.response.status != http.StatusOK || ctx.response.Written() {
 				return
 			}
 
@@ -64,7 +64,7 @@ func (l *App) wrapHandler(h Handler) HandlerFunc {
 
 			ctx := c.BaseContext()
 
-			if h(ctx.response, ctx.request); ctx.response.status != http.StatusOK || ctx.response.committed {
+			if h(ctx.response, ctx.request); ctx.response.status != http.StatusOK || ctx.response.Written() {
 				return
 			}
 

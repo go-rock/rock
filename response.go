@@ -2,6 +2,7 @@ package rock
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -14,10 +15,10 @@ import (
 // the http.ResponseWriter interface
 type Response struct {
 	http.ResponseWriter
-	status    int
-	size      int64
-	committed bool
-	context   Context
+	status int
+	size   int64
+	// committed bool
+	context Context
 }
 
 // newResponse creates a new Response for testing purposes
@@ -52,13 +53,14 @@ func (r *Response) Header() http.Header {
 // Thus explicit calls to WriteHeader are mainly used to
 // send error codes.
 func (r *Response) WriteHeader(code int) {
-	if r.committed {
-		log.Println("response already committed")
-		return
+	fmt.Println(code, r.status, r.size, noWritten)
+	if code > 0 && r.status != code {
+		if r.Written() {
+			log.Printf("[WARNING] Headers were already written. Wanted to override status code %d with %d", r.status, code)
+		}
+		r.status = code
+		// r.ResponseWriter.WriteHeader(code)
 	}
-	r.status = code
-	r.ResponseWriter.WriteHeader(code)
-	r.committed = true
 }
 
 func (w *Response) Written() bool {
@@ -67,7 +69,7 @@ func (w *Response) Written() bool {
 
 func (w *Response) WriteHeaderNow() {
 	if !w.Written() {
-		w.size = 0
+		w.size = noWritten
 		w.ResponseWriter.WriteHeader(w.status)
 	}
 }
@@ -78,6 +80,7 @@ func (w *Response) WriteHeaderNow() {
 // Content-Type line, Write adds a Content-Type set to the result of passing
 // the initial 512 bytes of written data to DetectContentType.
 func (r *Response) Write(b []byte) (n int, err error) {
+	r.WriteHeaderNow()
 	n, err = r.ResponseWriter.Write(b)
 	r.size += int64(n)
 	return n, err
@@ -85,6 +88,8 @@ func (r *Response) Write(b []byte) (n int, err error) {
 
 // WriteString write string to ResponseWriter
 func (r *Response) WriteString(s string) (n int, err error) {
+	r.WriteHeaderNow()
+
 	n, err = io.WriteString(r.ResponseWriter, s)
 	r.size += int64(n)
 	return
@@ -92,11 +97,15 @@ func (r *Response) WriteString(s string) (n int, err error) {
 
 // Flush wraps response writer's Flush function.
 func (r *Response) Flush() {
+	r.WriteHeaderNow()
 	r.ResponseWriter.(http.Flusher).Flush()
 }
 
 // Hijack wraps response writer's Hijack function.
 func (r *Response) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if r.size < 0 {
+		r.size = 0
+	}
 	return r.ResponseWriter.(http.Hijacker).Hijack()
 }
 
@@ -117,13 +126,12 @@ func (r *Response) Size() int64 {
 
 // Committed returns whether the *Response header has already been written to
 // and if has been committed to this return.
-func (r *Response) Committed() bool {
-	return r.committed
-}
+// func (r *Response) Committed() bool {
+// 	return r.committed
+// }
 
 func (r *Response) reset(w http.ResponseWriter) {
 	r.ResponseWriter = w
-	r.size = 0
+	r.size = noWritten
 	r.status = http.StatusOK
-	r.committed = false
 }
