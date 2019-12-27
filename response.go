@@ -2,7 +2,6 @@ package rock
 
 import (
 	"bufio"
-	"fmt"
 	"io"
 	"log"
 	"net"
@@ -53,7 +52,7 @@ func (r *Response) Header() http.Header {
 // Thus explicit calls to WriteHeader are mainly used to
 // send error codes.
 func (r *Response) WriteHeader(code int) {
-	fmt.Println(code, r.status, r.size, noWritten)
+	//fmt.Println(code, r.status, r.size, noWritten)
 	if code > 0 && r.status != code {
 		if r.Written() {
 			log.Printf("[WARNING] Headers were already written. Wanted to override status code %d with %d", r.status, code)

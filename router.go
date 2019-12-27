@@ -129,30 +129,49 @@ func (r *Router) Handle(method, path string, handlers []Handler) {
 	})
 }
 
+func (r *Router) StaticFS(path string, root string, handlers ...Handler) {
+	r.Static(path, http.Dir(root), handlers...)
+}
+
 //Static server static file
 //path is url path
 //root is root directory
-func (r *Router) Static(path string, root http.FileSystem, handlers ...HandlerFunc) {
+func (r *Router) Static(path string, root http.FileSystem, handlers ...Handler) {
 	path = r.path(path)
 	fileServer := http.StripPrefix(path, http.FileServer(root))
 
 	handlers = append(handlers, func(c Context) {
 		fileServer.ServeHTTP(c.Response(), c.Request())
+		c.Response().WriteHeaderNow()
 	})
-
 	p := r.staticPath(path)
-	r.app.mux.MethodFunc("GET", p, func(w http.ResponseWriter, req *http.Request) {
-		// c := r.app.createContext(w, req)
-		c := r.app.pool.Get().(*Ctx)
-		c.RequestStart(w, req)
-		c.HTMLRender(r.app.render)
-		// c.handlers = hs
-		c.SetHandlers(handlers)
-		// c.handlers = handlers
-		c.Next()
-		r.app.pool.Put(c)
-	})
+	r.GET(p, handlers...)
 }
+
+//Static server static file
+//path is url path
+//root is root directory
+// func (r *Router) Static(path string, root http.FileSystem, handlers ...HandlerFunc) {
+// 	path = r.path(path)
+// 	fileServer := http.StripPrefix(path, http.FileServer(root))
+
+// 	handlers = append(handlers, func(c Context) {
+// 		fileServer.ServeHTTP(c.Response(), c.Request())
+// 	})
+
+// 	p := r.staticPath(path)
+// 	r.app.mux.MethodFunc("GET", p, func(w http.ResponseWriter, req *http.Request) {
+// 		// c := r.app.createContext(w, req)
+// 		c := r.app.pool.Get().(*Ctx)
+// 		c.RequestStart(w, req)
+// 		c.HTMLRender(r.app.render)
+// 		// c.handlers = hs
+// 		c.SetHandlers(handlers)
+// 		// c.handlers = handlers
+// 		c.Next()
+// 		r.app.pool.Put(c)
+// 	})
+// }
 
 func (r *Router) staticPath(p string) string {
 	if p == "/" {

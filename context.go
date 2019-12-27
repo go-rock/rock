@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi"
+	"github.com/go-rock/rock/binding"
 )
 
 const (
@@ -507,6 +508,12 @@ func (c *Ctx) Decode(v interface{}, args ...interface{}) (err error) {
 			}
 		}
 	}
+	return
+}
+
+func (c *Ctx) ShouldBindJSON(v interface{}, args ...interface{}) (err error) {
+	err = c.Decode(v, args...)
+	err = binding.Validate(v)
 	return
 }
 
