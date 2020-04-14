@@ -67,6 +67,7 @@ type Context interface {
 	MustParamInt(name string, d int) int
 
 	MustQueryInt(name string, d int) int
+	MustQueryString(name string, d string) string
 
 	FormFile(name string) (*multipart.FileHeader, error)
 }

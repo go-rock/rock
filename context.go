@@ -159,6 +159,14 @@ func (c *Ctx) MustQueryInt(name string, d int) int {
 	return i
 }
 
+func (c *Ctx) MustQueryString(name string, d string) string {
+	val, bool := c.GetQuery(name)
+	if !bool {
+		return d
+	}
+	return val
+}
+
 // QueryParams returns the http.Request.URL.Query() values
 // this function is not for convenience, but rather performance
 // URL.Query() reparses the RawQuery every time it's called, but this
