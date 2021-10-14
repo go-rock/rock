@@ -11,10 +11,11 @@ import (
 // Mux is a tire base HTTP request router which can be used to
 // dispatch requests to different handler functions.
 type Router struct {
-	app       *App
-	trie      *trie.Trie
-	otherwise HandlerFunc
-	prefix    string
+	app         *App
+	trie        *trie.Trie
+	otherwise   HandlerFunc
+	middlewares []HandlerFunc
+	prefix      string
 }
 
 // New returns a Mux instance.
@@ -36,13 +37,16 @@ func (r *Router) Handle(method, pattern string, handler HandlerFunc) {
 	}
 	hds := []HandlerFunc{}
 	hds = append(hds, handler)
-	// debugPrintRoute(method, pattern, hds)
+	debugPrintRoute(method, pattern, hds)
 	r.trie.Define(pattern).Handle(strings.ToUpper(method), handler)
 }
 
+// func(r *Router) handle(c htt)
 // ServeHTTP implemented http.Handler interface
-func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+func (r *Router) handle(c *Ctx) {
 	var handler HandlerFunc
+	req := c.Request()
+	w := c.Writer()
 	path := req.URL.Path
 	method := req.Method
 	res := r.trie.Match(path)
@@ -91,14 +95,11 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			}
 			handler = r.otherwise
 		}
-
 	}
-	c := r.app.createContext(w, req)
 
 	if len(res.Params) != 0 {
 		c.params = res.Params
 	}
-	fmt.Println(c.Path, handler, c.params)
-
+	fmt.Println(c.Path, c.params, c.handlers)
 	handler(c)
 }

@@ -12,6 +12,7 @@ type (
 		Writer() http.ResponseWriter
 		Next()
 		// response method
+		StatusCode() int
 		Status(code int)
 		SetHeader(key string, value string)
 		String(code int, format string, values ...interface{})
@@ -29,7 +30,10 @@ type (
 		Path   string
 		Method string
 		// response info
-		StatusCode int
+		statusCode int
+		// middleware
+		handlers []HandlerFunc
+		index    int
 	}
 )
 
@@ -39,6 +43,7 @@ func newContext(w http.ResponseWriter, req *http.Request) *Ctx {
 		req:    req,
 		Path:   req.URL.Path,
 		Method: req.Method,
+		index:  -1,
 	}
 }
 
@@ -50,11 +55,19 @@ func (c *Ctx) Writer() http.ResponseWriter {
 }
 
 func (c *Ctx) Next() {
+	c.index++
+	s := len(c.handlers)
+	for ; c.index < s; c.index++ {
+		c.handlers[c.index](c)
+	}
+}
 
+func (c *Ctx) StatusCode() int {
+	return c.statusCode
 }
 
 func (c *Ctx) Status(code int) {
-	c.StatusCode = code
+	c.statusCode = code
 	c.writer.WriteHeader(code)
 }
 

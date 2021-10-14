@@ -7,13 +7,17 @@ import (
 )
 
 type App struct {
+	*RouterGroup
 	router *Router
 	pool   sync.Pool
+	groups []*RouterGroup
 }
 
 func New() *App {
 	app := &App{}
 	app.router = NewRouter(app)
+	app.RouterGroup = &RouterGroup{app: app}
+	app.groups = []*RouterGroup{app.RouterGroup}
 	app.pool.New = func() interface{} {
 		return app.allocateContext()
 	}
@@ -29,6 +33,7 @@ func (app *App) createContext(w http.ResponseWriter, r *http.Request) *Ctx {
 	c.req = r
 	c.Path = r.URL.Path
 	c.Method = r.Method
+	c.index = -1
 	return c
 }
 
@@ -42,10 +47,8 @@ func (app *App) Run(args ...string) (err error) {
 	return http.ListenAndServe(addr, app)
 }
 
-func (app *App) Get(pattern string, handler HandlerFunc) {
-	app.router.Handle(http.MethodGet, pattern, handler)
-}
-
 func (app *App) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	app.router.ServeHTTP(w, req)
+	c := app.createContext(w, req)
+
+	app.router.handle(c)
 }
