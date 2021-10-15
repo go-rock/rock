@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 )
 
 type (
@@ -20,6 +21,8 @@ type (
 		JSON(code int, obj interface{})
 		// request method
 		Param(key string) interface{}
+		Query(key string) string
+		QueryInt(key string) int
 	}
 
 	Ctx struct {
@@ -98,4 +101,16 @@ func (c *Ctx) JSON(code int, obj interface{}) {
 
 func (c *Ctx) Param(key string) interface{} {
 	return c.params[key]
+}
+
+// Query
+
+func (c *Ctx) Query(key string) string {
+	return c.req.URL.Query().Get(key)
+}
+
+func (c *Ctx) QueryInt(key string) int {
+	value := c.Query(key)
+	result, _ := strconv.Atoi(value)
+	return result
 }

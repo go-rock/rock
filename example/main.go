@@ -39,6 +39,7 @@ func main() {
 }
 
 func Post(c rock.Context) {
+	log.Printf("query from is %s %d", c.Query("from"), c.QueryInt("cid"))
 	c.String(200, "post id is %s", c.Param("id"))
 }
 
