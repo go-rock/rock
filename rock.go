@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"text/template"
 )
 
 type App struct {
@@ -11,6 +12,12 @@ type App struct {
 	router *Router
 	pool   sync.Pool
 	groups []*RouterGroup
+
+	// template
+	htmlTemplates *template.Template // for html render
+	funcMap       template.FuncMap   // for html render
+
+	render HTMLRender
 }
 
 func New() *App {
@@ -35,6 +42,7 @@ func (app *App) createContext(w http.ResponseWriter, r *http.Request) *Ctx {
 	c.Method = r.Method
 	c.statusCode = 200
 	c.index = -1
+	c.render = app.render
 	return c
 }
 

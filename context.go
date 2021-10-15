@@ -23,6 +23,13 @@ type (
 		Param(key string) interface{}
 		Query(key string) string
 		QueryInt(key string) int
+		// render
+		// HTML(code int, name string, data interface{})
+		HTML(name string, status ...int)
+		Data() M
+		SetData(M)
+		Set(key string, value interface{})
+		Get(key string) (value interface{}, exists bool)
 	}
 
 	Ctx struct {
@@ -38,6 +45,9 @@ type (
 		// middleware
 		handlers []HandlerFunc
 		index    int
+		// render
+		render HTMLRender
+		data   M
 	}
 )
 
@@ -113,4 +123,27 @@ func (c *Ctx) QueryInt(key string) int {
 	value := c.Query(key)
 	result, _ := strconv.Atoi(value)
 	return result
+}
+
+// Context data
+
+func (c *Ctx) Data() M {
+	return c.data
+}
+
+// set all data
+func (c *Ctx) SetData(data M) {
+	c.data = data
+}
+
+func (c *Ctx) Set(key string, value interface{}) {
+	if c.data == nil {
+		c.data = make(map[string]interface{})
+	}
+	c.data[key] = value
+}
+
+func (c *Ctx) Get(key string) (value interface{}, exists bool) {
+	value, exists = c.data[key]
+	return
 }

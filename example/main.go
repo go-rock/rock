@@ -6,11 +6,14 @@ import (
 	"time"
 
 	"github.com/doabit/rock"
+	"github.com/doabit/rock/example/render"
 )
 
 func main() {
 	app := rock.New()
 	app.Use(Logger())
+	app.HTMLRender(render.Default())
+	// app.LoadHTMLGlob("templates/*")
 	app.Static("/assets", "./static")
 
 	app.Get("/", Home)
@@ -28,6 +31,11 @@ func main() {
 
 	admin := app.Group("/admin")
 	admin.Use(auth())
+	// admin.HTMLRender(render.New(render.ViewConfig{
+	// 	ViewDir:   "./templates/admin/",
+	// 	Extension: ".html",
+	// 	Box:       tplset,
+	// }))
 	{
 		admin.Get("/login", AdminLogin)
 	}
@@ -44,7 +52,8 @@ func Post(c rock.Context) {
 }
 
 func Home(c rock.Context) {
-	c.JSON(200, rock.H{"msg": "ok"})
+	// c.JSON(200, rock.H{"msg": "ok"})
+	c.HTML("home")
 }
 
 // admin
