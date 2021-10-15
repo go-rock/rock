@@ -56,10 +56,8 @@ func (c *Ctx) Writer() http.ResponseWriter {
 }
 
 func (c *Ctx) Next() {
-
 	c.index++
 	s := len(c.handlers)
-	fmt.Println(c.index, s)
 	for ; c.index < s; c.index++ {
 		c.handlers[c.index](c)
 	}

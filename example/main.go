@@ -14,14 +14,13 @@ func main() {
 	app.Static("/assets", "./static")
 
 	app.Get("/", Home)
-	app.Get("/blog/:name*", Home)
 	app.Get("/posts/:id", Post)
 
 	api := app.Group("/api")
 	api.Use(onlyForApi())
 	{
 		api.Get("/home", ApiIndex)
-		v1 := api.Group("v1")
+		v1 := api.Group("/v1")
 		{
 			v1.Get("/home", ApiIndex)
 		}
