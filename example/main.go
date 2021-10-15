@@ -26,6 +26,7 @@ func main() {
 	}
 
 	admin := app.Group("/admin")
+	admin.Use(auth())
 	{
 		admin.Get("/login", AdminLogin)
 	}
@@ -46,6 +47,7 @@ func Home(c rock.Context) {
 
 // admin
 func AdminLogin(c rock.Context) {
+	log.Println("admin auth action")
 	c.JSON(http.StatusOK, rock.H{"msg": "admin login"})
 }
 
@@ -63,6 +65,16 @@ func onlyForApi() rock.HandlerFunc {
 		c.Fail(500, "Internal Server Error")
 		// Calculate resolution time
 		log.Printf("Api only code [%d] %s in %v for group api", c.StatusCode(), c.Request().RequestURI, time.Since(t))
+	}
+}
+
+func auth() rock.HandlerFunc {
+	return func(c rock.Context) {
+		// t := time.Now()
+		log.Println("auth before")
+		c.Next()
+		log.Println("auth after")
+		// c.Fail(500, "Internal Server Error")
 	}
 }
 

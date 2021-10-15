@@ -1,7 +1,6 @@
 package rock
 
 import (
-	"fmt"
 	"net/http"
 	"strings"
 	"sync"
@@ -44,7 +43,7 @@ func (app *App) Run(args ...string) (err error) {
 	if len(args) > 0 {
 		addr = args[0]
 	}
-	fmt.Println("rock running on " + addr)
+	debugPrint("Rock running on %s", addr)
 	return http.ListenAndServe(addr, app)
 }
 
