@@ -9,7 +9,6 @@ type RouterGroup struct {
 	middlewares []HandlerFunc // support middleware
 	parent      *RouterGroup  // support nesting
 	app         *App          // all groups share a Engine instance
-	// *Router
 }
 
 func (group *RouterGroup) Group(prefix string) *RouterGroup {
@@ -33,6 +32,6 @@ func (group *RouterGroup) Get(pattern string, handler HandlerFunc) {
 	group.addRoute(http.MethodGet, pattern, handler)
 }
 
-// func (r *Router) Use(middlewares ...HandlerFunc) {
-// 	r.middlewares = append(r.middlewares, middlewares...)
-// }
+func (group *RouterGroup) Use(middlewares ...HandlerFunc) {
+	group.middlewares = append(group.middlewares, middlewares...)
+}

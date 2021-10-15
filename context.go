@@ -15,6 +15,7 @@ type (
 		StatusCode() int
 		Status(code int)
 		SetHeader(key string, value string)
+		Fail(code int, err string)
 		String(code int, format string, values ...interface{})
 		JSON(code int, obj interface{})
 		// request method
@@ -55,8 +56,10 @@ func (c *Ctx) Writer() http.ResponseWriter {
 }
 
 func (c *Ctx) Next() {
+
 	c.index++
 	s := len(c.handlers)
+	fmt.Println(c.index, s)
 	for ; c.index < s; c.index++ {
 		c.handlers[c.index](c)
 	}
@@ -69,6 +72,11 @@ func (c *Ctx) StatusCode() int {
 func (c *Ctx) Status(code int) {
 	c.statusCode = code
 	c.writer.WriteHeader(code)
+}
+
+func (c *Ctx) Fail(code int, err string) {
+	c.index = len(c.handlers)
+	c.JSON(code, H{"message": err})
 }
 
 func (c *Ctx) SetHeader(key string, value string) {

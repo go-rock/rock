@@ -3,6 +3,7 @@ package rock
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 )
 
@@ -48,7 +49,15 @@ func (app *App) Run(args ...string) (err error) {
 }
 
 func (app *App) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	var middlewares []HandlerFunc
+	for _, group := range app.groups {
+		if strings.HasPrefix(req.URL.Path, group.prefix) {
+			middlewares = append(middlewares, group.middlewares...)
+		}
+	}
 	c := app.createContext(w, req)
+
+	c.handlers = middlewares
 
 	app.router.handle(c)
 }
