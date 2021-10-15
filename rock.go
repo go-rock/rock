@@ -40,7 +40,7 @@ func (app *App) createContext(w http.ResponseWriter, r *http.Request) *Ctx {
 	c.req = r
 	c.Path = r.URL.Path
 	c.Method = r.Method
-	c.statusCode = 200
+	c.statusCode = http.StatusOK
 	c.index = -1
 	c.render = app.render
 	return c

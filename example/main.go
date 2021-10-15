@@ -2,10 +2,10 @@ package main
 
 import (
 	"log"
-	"net/http"
 	"time"
 
 	"github.com/doabit/rock"
+	"github.com/doabit/rock/example/config"
 	"github.com/doabit/rock/example/render"
 )
 
@@ -13,12 +13,11 @@ func main() {
 	app := rock.New()
 	app.Use(Logger())
 	app.HTMLRender(render.Default())
+	config.Setup(app)
 	// app.LoadHTMLGlob("templates/*")
 	app.Static("/assets", "./static")
-
 	app.Get("/", Home)
 	app.Get("/posts/:id", Post)
-
 	api := app.Group("/api")
 	api.Use(onlyForApi())
 	{
@@ -31,12 +30,10 @@ func main() {
 
 	admin := app.Group("/admin")
 	admin.Use(auth())
-	// admin.HTMLRender(render.New(render.ViewConfig{
-	// 	ViewDir:   "./templates/admin/",
-	// 	Extension: ".html",
-	// 	Box:       tplset,
-	// }))
+	// app.GetHTMLRender().SetViewDir("./tem/")
+	// app.GetHTMLRender().SetViewDir("./template/")
 	{
+		app.GetHTMLRender().SetViewDir("./tem/")
 		admin.Get("/login", AdminLogin)
 	}
 
@@ -59,7 +56,8 @@ func Home(c rock.Context) {
 // admin
 func AdminLogin(c rock.Context) {
 	log.Println("admin auth action")
-	c.JSON(http.StatusOK, rock.H{"msg": "admin login"})
+	// c.JSON(http.StatusOK, rock.H{"msg": "admin login"})
+	c.HTML("admin/login")
 }
 
 // Api
