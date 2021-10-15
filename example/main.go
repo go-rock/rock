@@ -11,8 +11,10 @@ import (
 func main() {
 	app := rock.New()
 	app.Use(Logger())
+	app.Static("/assets", "./static")
 
 	app.Get("/", Home)
+	app.Get("/blog/:name*", Home)
 	app.Get("/posts/:id", Post)
 
 	api := app.Group("/api")
@@ -70,11 +72,9 @@ func onlyForApi() rock.HandlerFunc {
 
 func auth() rock.HandlerFunc {
 	return func(c rock.Context) {
-		// t := time.Now()
 		log.Println("auth before")
 		c.Next()
 		log.Println("auth after")
-		// c.Fail(500, "Internal Server Error")
 	}
 }
 

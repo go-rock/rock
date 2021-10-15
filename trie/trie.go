@@ -1,3 +1,4 @@
+// Modify from https://github.com/teambition/trie-mux
 package trie
 
 import (
