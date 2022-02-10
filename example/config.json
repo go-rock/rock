@@ -1,8 +1,0 @@
-{
-  "port": ":4000",
-  "host": "www.doabit.com",
-  "installed": true,
-  "theme": "default",
-  "themesPath": "./themes/",
-  "allowDelete": true
-}

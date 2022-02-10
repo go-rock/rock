@@ -13,11 +13,13 @@ import (
 type Router struct {
 	trie      *trie.Trie
 	otherwise HandlerFunc
+	noRoute   HandlerFunc
+	noMethod  HandlerFunc
 	// prefix    string
 }
 
 // New returns a Mux instance.
-func NewRouter(app *App, opts ...trie.Options) *Router {
+func NewRouter(opts ...trie.Options) *Router {
 	return &Router{trie: trie.New(opts...)}
 }
 
@@ -63,22 +65,19 @@ func (r *Router) handle(c *Ctx) {
 			http.Redirect(w, req, req.URL.String(), code)
 			return
 		}
-
-		if r.otherwise == nil {
+		if r.noRoute == nil {
 			http.Error(w, fmt.Sprintf(`"%s" not implemented`, path), 501)
 			return
 		}
-		handler = r.otherwise
-
+		handler = r.noRoute
 	} else {
-		ok := false
+		// ok := false
 		hd := res.Node.GetHandler(method)
-		handler, ok = hd.(HandlerFunc)
-		if !ok {
-			panic("handler error")
-		}
-		handler = r.wrapHandler(hd)
-
+		handler, _ = hd.(HandlerFunc)
+		// handler = r.wrapHandler(hd)
+		// if !ok {
+		// 	panic("handler error")
+		// }
 		if handler == nil {
 			// OPTIONS support
 			if method == http.MethodOptions {
@@ -87,13 +86,13 @@ func (r *Router) handle(c *Ctx) {
 				return
 			}
 
-			if r.otherwise == nil {
+			if r.noMethod == nil {
 				// If no route handler is returned, it's a 405 error
 				w.Header().Set("Allow", res.Node.GetAllow())
 				http.Error(w, fmt.Sprintf(`"%s" not allowed in "%s"`, method, path), 405)
 				return
 			}
-			handler = r.otherwise
+			handler = r.noMethod
 		}
 	}
 

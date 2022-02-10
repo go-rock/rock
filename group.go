@@ -12,6 +12,18 @@ type RouterGroup struct {
 	app         *App          // all groups share a Engine instance
 }
 
+func (group *RouterGroup) RegisterView(viewEngine ViewEngine) {
+	// group.app.view.Register(viewEngine)
+
+	handler := func(ctx Context) {
+		ctx.ViewEngine(viewEngine)
+		ctx.Next()
+	}
+	group.Use(handler)
+	// api.UseError(handler)
+}
+func (group *RouterGroup) SetRender(render ViewEngine) {}
+
 func (group *RouterGroup) Group(prefix string) *RouterGroup {
 	app := group.app
 	newGroup := &RouterGroup{
@@ -33,8 +45,20 @@ func (group *RouterGroup) Get(pattern string, handler HandlerFunc) {
 	group.addRoute(http.MethodGet, pattern, handler)
 }
 
+func (group *RouterGroup) Post(pattern string, handler HandlerFunc) {
+	group.addRoute(http.MethodPost, pattern, handler)
+}
+
 func (group *RouterGroup) Use(middlewares ...HandlerFunc) {
 	group.middlewares = append(group.middlewares, middlewares...)
+}
+
+func (group *RouterGroup) NoRoute(handler HandlerFunc) {
+	group.app.router.noRoute = handler
+}
+
+func (group *RouterGroup) NoMethod(handler HandlerFunc) {
+	group.app.router.noMethod = handler
 }
 
 // create static handler

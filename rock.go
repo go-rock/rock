@@ -1,10 +1,13 @@
 package rock
 
 import (
+	"errors"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
-	"text/template"
+
+	log "github.com/kataras/golog"
 )
 
 type App struct {
@@ -14,15 +17,20 @@ type App struct {
 	groups []*RouterGroup
 
 	// template
-	htmlTemplates *template.Template // for html render
-	funcMap       template.FuncMap   // for html render
+	config *Configuration
+	view   View
+}
 
-	render HTMLRender
+func (app *App) GetView() View {
+	return app.view
 }
 
 func New() *App {
-	app := &App{}
-	app.router = NewRouter(app)
+	config := DefaultConfiguration()
+	app := &App{
+		config: &config,
+		router: NewRouter(),
+	}
 	app.RouterGroup = &RouterGroup{app: app}
 	app.groups = []*RouterGroup{app.RouterGroup}
 	app.pool.New = func() interface{} {
@@ -34,6 +42,7 @@ func New() *App {
 func (app *App) allocateContext() *Ctx {
 	return &Ctx{app: app}
 }
+
 func (app *App) createContext(w http.ResponseWriter, r *http.Request) *Ctx {
 	c := app.pool.Get().(*Ctx)
 	c.writer = w
@@ -42,7 +51,6 @@ func (app *App) createContext(w http.ResponseWriter, r *http.Request) *Ctx {
 	c.Method = r.Method
 	c.statusCode = http.StatusOK
 	c.index = -1
-	c.render = app.render
 	return c
 }
 
@@ -52,7 +60,7 @@ func (app *App) Run(args ...string) (err error) {
 	if len(args) > 0 {
 		addr = args[0]
 	}
-	debugPrint("Rock running on %s", addr)
+	debugPrint("Rock running on http://localhost%s", addr)
 	return http.ListenAndServe(addr, app)
 }
 
@@ -68,4 +76,26 @@ func (app *App) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	c.handlers = middlewares
 
 	app.router.handle(c)
+	app.pool.Put(c)
+}
+
+// ConfigurationReadOnly returns an object which doesn't allow field writing.
+func (app *App) ConfigurationReadOnly() *Configuration {
+	return app.config
+}
+
+func (app *App) View(writer io.Writer, filename string, bindingData interface{}) error {
+	if !app.view.Registered() {
+		err := errors.New("view engine is missing, use `RegisterView`")
+		// app.logger.Error(err)
+		log.Error(err)
+		return err
+	}
+
+	return app.view.ExecuteWriter(writer, filename, bindingData)
+}
+
+func (app *App) RegisterView(viewEngine ViewEngine) {
+	log.Info("register view from app")
+	app.view.Register(viewEngine)
 }
