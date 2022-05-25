@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/doabit/rock/trie"
+	"github.com/go-rock/rock/trie"
 )
 
 // Mux is a tire base HTTP request router which can be used to
