@@ -24,9 +24,9 @@ func NewRouter(opts ...trie.Options) *Router {
 }
 
 // Get registers a new GET route for a path with matching handler in the Router.
-func (r *Router) Get(pattern string, handler HandlerFunc) {
-	r.Handle(http.MethodGet, pattern, handler)
-}
+// func (r *Router) Get(pattern string, handler HandlerFunc) {
+// 	r.Handle(http.MethodGet, pattern, handler)
+// }
 
 func (r *Router) Handle(method, pattern string, handler HandlerFunc) {
 	if method == "" {

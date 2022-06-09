@@ -49,6 +49,22 @@ func (group *RouterGroup) Post(pattern string, handler HandlerFunc) {
 	group.addRoute(http.MethodPost, pattern, handler)
 }
 
+func (group *RouterGroup) Put(pattern string, handler HandlerFunc) {
+	group.addRoute(http.MethodPut, pattern, handler)
+}
+
+func (group *RouterGroup) Patch(pattern string, handler HandlerFunc) {
+	group.addRoute(http.MethodPatch, pattern, handler)
+}
+
+func (group *RouterGroup) Delete(pattern string, handler HandlerFunc) {
+	group.addRoute(http.MethodDelete, pattern, handler)
+}
+
+func (group *RouterGroup) Options(pattern string, handler HandlerFunc) {
+	group.addRoute(http.MethodOptions, pattern, handler)
+}
+
 func (group *RouterGroup) Use(middlewares ...HandlerFunc) {
 	group.middlewares = append(group.middlewares, middlewares...)
 }
