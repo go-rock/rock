@@ -61,19 +61,20 @@ func (c *Ctx) GetView() View {
 	return c.app.view
 }
 
-func newContext(w http.ResponseWriter, req *http.Request) *Ctx {
-	return &Ctx{
-		writer: w,
-		req:    req,
-		Path:   req.URL.Path,
-		Method: req.Method,
-		index:  -1,
-	}
-}
+// func newContext(w http.ResponseWriter, req *http.Request) *Ctx {
+// 	return &Ctx{
+// 		writer: w,
+// 		req:    req,
+// 		Path:   req.URL.Path,
+// 		Method: req.Method,
+// 		index:  -1,
+// 	}
+// }
 
 func (c *Ctx) Request() *http.Request {
 	return c.req
 }
+
 func (c *Ctx) Writer() http.ResponseWriter {
 	return c.writer
 }
@@ -107,7 +108,10 @@ func (c *Ctx) SetHeader(key string, value string) {
 func (c *Ctx) String(code int, format string, values ...interface{}) {
 	c.SetHeader("Content-Type", "text/plain")
 	c.Status(code)
-	c.writer.Write([]byte(fmt.Sprintf(format, values...)))
+	_, err := c.Write([]byte(fmt.Sprintf(format, values...)))
+	if err != nil {
+		http.Error(c.writer, err.Error(), 500)
+	}
 }
 
 func (c *Ctx) JSON(code int, obj interface{}) {
