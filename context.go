@@ -2,9 +2,19 @@ package rock
 
 import (
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
+	"strings"
+
+	"github.com/go-rock/rock/binding"
+)
+
+const (
+	contentType    = "Content-Type"
+	acceptLanguage = "Accept-Language"
 )
 
 type (
@@ -35,13 +45,17 @@ type (
 		Get(key string) (value interface{}, exists bool)
 
 		GetView() View
+
+		// binding
+		Decode(v interface{}, args ...interface{}) (err error)
+		ShouldBindJSON(v interface{}, args ...interface{}) (err error)
 	}
 
 	Ctx struct {
-		app    *App
-		req    *http.Request
-		writer http.ResponseWriter
-		params Map
+		app     *App
+		request *http.Request
+		writer  http.ResponseWriter
+		params  Map
 		// request info
 		Path   string
 		Method string
@@ -54,6 +68,9 @@ type (
 		// render HTMLRender
 		data   M
 		values Store
+		// form
+		formParsed          bool
+		multipartFormParsed bool
 	}
 )
 
@@ -71,8 +88,20 @@ func (c *Ctx) GetView() View {
 // 	}
 // }
 
+func (c *Ctx) newContext(w http.ResponseWriter, r *http.Request) *Ctx {
+	c.writer = w
+	c.request = r
+	c.Path = r.URL.Path
+	c.Method = r.Method
+	c.statusCode = http.StatusOK
+	c.index = -1
+	c.formParsed = false
+	c.multipartFormParsed = false
+	return c
+}
+
 func (c *Ctx) Request() *http.Request {
-	return c.req
+	return c.request
 }
 
 func (c *Ctx) Writer() http.ResponseWriter {
@@ -130,7 +159,7 @@ func (c *Ctx) Param(key string) interface{} {
 // Query
 
 func (c *Ctx) Query(key string) string {
-	return c.req.URL.Query().Get(key)
+	return c.request.URL.Query().Get(key)
 }
 
 func (c *Ctx) QueryInt(key string) int {
@@ -187,4 +216,121 @@ func (c *Ctx) Get(key string) (value interface{}, exists bool) {
 // possible to maximize compatibility.
 func (ctx *Ctx) Write(rawBody []byte) (int, error) {
 	return ctx.writer.Write(rawBody)
+}
+
+// Form
+
+// ParseForm calls the underlying http.Request ParseForm
+// but also adds the URL params to the request Form as if
+// they were defined as query params i.e. ?id=13&ok=true but
+// does not add the params to the http.Request.URL.RawQuery
+// for SEO purposes
+func (c *Ctx) ParseForm() error {
+	if c.formParsed {
+		return nil
+	}
+
+	if err := c.request.ParseForm(); err != nil {
+		return err
+	}
+
+	for key, value := range c.params {
+		c.request.Form.Add(key, value.(string))
+	}
+
+	c.formParsed = true
+
+	return nil
+}
+
+// ParseMultipartForm calls the underlying http.Request ParseMultipartForm
+// but also adds the URL params to the request Form as if they were defined
+// as query params i.e. ?id=13&ok=true but does not add the params to the
+// http.Request.URL.RawQuery for SEO purposes
+func (c *Ctx) ParseMultipartForm(maxMemory int64) error {
+	if c.multipartFormParsed {
+		return nil
+	}
+
+	if err := c.request.ParseMultipartForm(maxMemory); err != nil {
+		return err
+	}
+
+	for key, value := range c.params {
+		c.request.Form.Add(key, value.(string))
+	}
+
+	c.multipartFormParsed = true
+
+	return nil
+}
+
+// Binding
+
+// Decode takes the request and attempts to discover it's content type via
+// the http headers and then decode the request body into the provided struct.
+// Example if header was "application/json" would decode using
+// json.NewDecoder(io.LimitReader(c.request.Body, maxMemory)).Decode(v).
+func (c *Ctx) Decode(v interface{}, args ...interface{}) (err error) {
+	var maxMemory int64 = 10000
+	var includeFormQueryParams bool = false
+	if len(args) > 0 {
+		result, ok := args[0].(bool)
+		if ok {
+			includeFormQueryParams = result
+		}
+	}
+	if len(args) > 1 {
+		result, ok := args[1].(int)
+		if ok {
+			maxMemory = int64(result)
+		}
+	}
+
+	initFormDecoder()
+
+	typ := c.request.Header.Get(ContentType)
+
+	if idx := strings.Index(typ, ";"); idx != -1 {
+		typ = typ[:idx]
+	}
+
+	switch typ {
+
+	case ApplicationJSON:
+		err = json.NewDecoder(io.LimitReader(c.request.Body, maxMemory)).Decode(v)
+
+	case ApplicationXML:
+		err = xml.NewDecoder(io.LimitReader(c.request.Body, maxMemory)).Decode(v)
+
+	case ApplicationForm:
+
+		if err = c.ParseForm(); err == nil {
+			if includeFormQueryParams {
+				err = formDecoder.Decode(v, c.request.Form)
+			} else {
+				err = formDecoder.Decode(v, c.request.PostForm)
+			}
+		}
+
+	case MultipartForm:
+
+		if err = c.ParseMultipartForm(maxMemory); err == nil {
+			if includeFormQueryParams {
+				err = formDecoder.Decode(v, c.request.Form)
+			} else {
+				err = formDecoder.Decode(v, c.request.MultipartForm.Value)
+			}
+		}
+	}
+	return
+}
+
+func (c *Ctx) ShouldBindJSON(v interface{}, args ...interface{}) (err error) {
+	err = c.Decode(v, args...)
+	if err != nil {
+		return err
+	}
+	err = binding.Validate(v)
+	return err
 }

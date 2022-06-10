@@ -7,7 +7,13 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/go-playground/form/v4"
 	log "github.com/kataras/golog"
+)
+
+var (
+	formDecoder     *form.Decoder
+	formDecoderInit sync.Once
 )
 
 type App struct {
@@ -45,12 +51,7 @@ func (app *App) allocateContext() *Ctx {
 
 func (app *App) createContext(w http.ResponseWriter, r *http.Request) *Ctx {
 	c := app.pool.Get().(*Ctx)
-	c.writer = w
-	c.req = r
-	c.Path = r.URL.Path
-	c.Method = r.Method
-	c.statusCode = http.StatusOK
-	c.index = -1
+	c.newContext(w, r)
 	return c
 }
 
@@ -98,4 +99,12 @@ func (app *App) View(writer io.Writer, filename string, bindingData interface{})
 func (app *App) RegisterView(viewEngine ViewEngine) {
 	log.Info("register view from app")
 	app.view.Register(viewEngine)
+}
+
+// Bidning
+
+func initFormDecoder() {
+	formDecoderInit.Do(func() {
+		formDecoder = form.NewDecoder()
+	})
 }
