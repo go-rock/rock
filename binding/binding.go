@@ -1,35 +1,5 @@
 package binding
 
-import (
-	ut "github.com/go-playground/universal-translator"
-	"github.com/go-playground/validator/v10"
-)
-
-type CommonError struct {
-	Errors map[string]interface{} `json:"errors"`
-}
-
-func ValidatorError(err error) CommonError {
-	res := CommonError{}
-	res.Errors = make(map[string]interface{})
-	if err != nil {
-		switch errs := err.(type) {
-		case validator.ValidationErrors:
-			for _, e := range errs {
-				res.Errors[e.StructField()] = e.Translate(trans)
-			}
-		default:
-			res.Errors["error"] = err.Error()
-		}
-	}
-	return res
-}
-
-var (
-	uni   *ut.UniversalTranslator
-	trans ut.Translator
-)
-
 // StructValidator is the minimal interface which needs to be implemented in
 // order for it to be used as the validator engine for ensuring the correctness
 // of the request. Gin provides a default implementation for this using
