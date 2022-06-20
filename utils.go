@@ -2,7 +2,9 @@ package rock
 
 import (
 	"log"
+	"mime"
 	"net/http"
+	"path/filepath"
 	"strings"
 )
 
@@ -37,4 +39,11 @@ func EnsureTemplateName(s string, v ViewEngine) string {
 	}
 
 	return s
+}
+
+func detectContentType(filename string) (t string) {
+	if t = mime.TypeByExtension(filepath.Ext(filename)); t == "" {
+		t = OctetStream
+	}
+	return
 }

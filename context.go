@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"mime/multipart"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -19,7 +21,6 @@ const (
 
 type (
 	Context interface {
-		Abort()
 		Request() *http.Request
 		Writer() http.ResponseWriter
 		Next()
@@ -32,10 +33,17 @@ type (
 		Fail(code int, err string)
 		String(code int, format string, values ...interface{})
 		JSON(code int, obj interface{})
+		XML(int, interface{}) error
 		// request method
 		Param(key string) interface{}
 		Query(key string) string
+		GetQuery(name string) (string, bool)
 		QueryInt(key string) int
+
+		ParseForm() error
+		ParseMultipartForm(maxMemory int64) error
+
+		ClientIP() (clientIP string)
 		// render
 		// HTML(code int, name string, data interface{})
 		ViewEngine(engine ViewEngine)
@@ -52,7 +60,21 @@ type (
 		ShouldBindJSON(v interface{}, args ...interface{}) (err error)
 
 		// Methods
+		Abort()
+		AbortWithStatusJSON(code int, jsonObj interface{})
 		Redirect(url string)
+
+		// Post body
+
+		MustPostInt(key string, d int) int
+		MustPostString(key string, d string) string
+
+		MustParamInt(name string, d int) int
+
+		MustQueryInt(name string, d int) int
+		MustQueryString(name string, d string) string
+
+		FormFile(name string) (*multipart.FileHeader, error)
 	}
 
 	Ctx struct {
@@ -156,6 +178,23 @@ func (c *Ctx) JSON(code int, obj interface{}) {
 	}
 }
 
+// XML marshals provided interface + returns XML + status code
+func (c *Ctx) XML(code int, i interface{}) (err error) {
+	b, err := xml.Marshal(i)
+	if err != nil {
+		return err
+	}
+
+	c.writer.Header().Set(ContentType, ApplicationXMLCharsetUTF8)
+	c.writer.WriteHeader(code)
+
+	if _, err = c.writer.Write([]byte(xml.Header)); err == nil {
+		_, err = c.writer.Write(b)
+	}
+
+	return
+}
+
 func (c *Ctx) Param(key string) interface{} {
 	return c.params[key]
 }
@@ -164,6 +203,14 @@ func (c *Ctx) Param(key string) interface{} {
 
 func (c *Ctx) Query(key string) string {
 	return c.request.URL.Query().Get(key)
+}
+
+func (c *Ctx) GetQuery(name string) (string, bool) {
+	if val := c.Query(name); val != "" {
+		return val, true
+	} else {
+		return "", false
+	}
 }
 
 func (c *Ctx) QueryInt(key string) int {
@@ -195,29 +242,7 @@ func (c *Ctx) Get(key string) (value interface{}, exists bool) {
 	return
 }
 
-//  +------------------------------------------------------------+
-//  | Body (raw) Writers                                         |
-//  +------------------------------------------------------------+
-
-// Write writes the data to the connection as part of an HTTP reply.
-//
-// If WriteHeader has not yet been called, Write calls
-// WriteHeader(http.StatusOK) before writing the data. If the Header
-// does not contain a Content-Type line, Write adds a Content-Type set
-// to the result of passing the initial 512 bytes of written data to
-// DetectContentType.
-//
-// Depending on the HTTP protocol version and the client, calling
-// Write or WriteHeader may prevent future reads on the
-// Request.Body. For HTTP/1.x requests, handlers should read any
-// needed request body data before writing the response. Once the
-// headers have been flushed (due to either an explicit Flusher.Flush
-// call or writing enough data to trigger a flush), the request body
-// may be unavailable. For HTTP/2 requests, the Go HTTP server permits
-// handlers to continue to read the request body while concurrently
-// writing the response. However, such behavior may not be supported
-// by all HTTP/2 clients. Handlers should read before writing if
-// possible to maximize compatibility.
+//  Body (raw) Writers
 func (ctx *Ctx) Write(rawBody []byte) (int, error) {
 	return ctx.writer.Write(rawBody)
 }
@@ -348,4 +373,132 @@ func (c *Ctx) Redirect(url string) {
 
 func (c *Ctx) Abort() {
 	c.index = abortIndex
+}
+
+// AbortWithStatusJSON calls `Abort()` and then `JSON` internally.
+// This method stops the chain, writes the status code and return a JSON body.
+// It also sets the Content-Type as "application/json".
+func (c *Ctx) AbortWithStatusJSON(code int, jsonObj interface{}) {
+	c.Abort()
+	c.JSON(code, jsonObj)
+}
+
+// ClientIP implements a best effort algorithm to return the real client IP, it parses
+// X-Real-IP and X-Forwarded-For in order to work properly with reverse-proxies such us: nginx or haproxy.
+func (c *Ctx) ClientIP() (clientIP string) {
+	var values []string
+
+	if values, _ = c.request.Header[XRealIP]; len(values) > 0 {
+
+		clientIP = strings.TrimSpace(values[0])
+		if clientIP != blank {
+			return
+		}
+	}
+
+	if values, _ = c.request.Header[XForwardedFor]; len(values) > 0 {
+		clientIP = values[0]
+
+		if index := strings.IndexByte(clientIP, ','); index >= 0 {
+			clientIP = clientIP[0:index]
+		}
+
+		clientIP = strings.TrimSpace(clientIP)
+		if clientIP != blank {
+			return
+		}
+	}
+
+	clientIP, _, _ = net.SplitHostPort(strings.TrimSpace(c.request.RemoteAddr))
+
+	return
+}
+
+// Attachment is a helper method for returning an attachement file
+// to be downloaded, if you with to open inline see function
+func (c *Ctx) Attachment(r io.Reader, filename string) (err error) {
+	c.writer.Header().Set(ContentDisposition, "attachment;filename="+filename)
+	c.writer.Header().Set(ContentType, detectContentType(filename))
+	c.writer.WriteHeader(http.StatusOK)
+
+	_, err = io.Copy(c.writer, r)
+
+	return
+}
+
+// Inline is a helper method for returning a file inline to
+// be rendered/opened by the browser
+func (c *Ctx) Inline(r io.Reader, filename string) (err error) {
+	c.writer.Header().Set(ContentDisposition, "inline;filename="+filename)
+	c.writer.Header().Set(ContentType, detectContentType(filename))
+	c.writer.WriteHeader(http.StatusOK)
+
+	_, err = io.Copy(c.writer, r)
+
+	return
+}
+
+// form params
+
+/////////////////////////
+
+func (c *Ctx) MustPostInt(key string, d int) int {
+	val := c.Request().PostFormValue(key)
+	if val == "" {
+		return d
+	}
+	i, err := strconv.Atoi(val)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	return i
+}
+
+func (c *Ctx) MustPostString(key, d string) string {
+	val := c.Request().PostFormValue(key)
+	if val == "" {
+		return d
+	}
+
+	return val
+}
+
+func (c *Ctx) FormFile(name string) (*multipart.FileHeader, error) {
+	_, fh, err := c.request.FormFile(name)
+	return fh, err
+}
+
+func (c *Ctx) MustParamInt(name string, d int) int {
+	val := c.Param(name).(string)
+	if val == "" {
+		return d
+	}
+	i, err := strconv.Atoi(val)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	return i
+}
+
+func (c *Ctx) MustQueryInt(name string, d int) int {
+	val, bool := c.GetQuery(name)
+	if !bool {
+		return d
+	}
+	i, err := strconv.Atoi(val)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	return i
+}
+
+func (c *Ctx) MustQueryString(name string, d string) string {
+	val, bool := c.GetQuery(name)
+	if !bool {
+		return d
+	}
+	return val
 }
