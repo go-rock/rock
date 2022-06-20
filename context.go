@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -13,12 +14,12 @@ import (
 )
 
 const (
-	contentType    = "Content-Type"
-	acceptLanguage = "Accept-Language"
+	abortIndex = math.MaxInt8 / 2
 )
 
 type (
 	Context interface {
+		Abort()
 		Request() *http.Request
 		Writer() http.ResponseWriter
 		Next()
@@ -49,6 +50,9 @@ type (
 		// binding
 		Decode(v interface{}, args ...interface{}) (err error)
 		ShouldBindJSON(v interface{}, args ...interface{}) (err error)
+
+		// Methods
+		Redirect(url string)
 	}
 
 	Ctx struct {
@@ -333,4 +337,15 @@ func (c *Ctx) ShouldBindJSON(v interface{}, args ...interface{}) (err error) {
 	}
 	err = binding.Validate(v)
 	return err
+}
+
+// Redirect to
+func (c *Ctx) Redirect(url string) {
+	c.writer.Header().Set("Location", url)
+	c.writer.WriteHeader(http.StatusFound)
+	c.String(200, "Redirecting to: "+url)
+}
+
+func (c *Ctx) Abort() {
+	c.index = abortIndex
 }
