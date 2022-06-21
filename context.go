@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/fatih/structs"
 	"github.com/go-rock/rock/binding"
 )
 
@@ -21,6 +22,7 @@ const (
 
 type (
 	Context interface {
+		Application() *App
 		Request() *http.Request
 		Writer() http.ResponseWriter
 		Next()
@@ -52,6 +54,10 @@ type (
 		SetData(M)
 		Set(key string, value interface{})
 		Get(key string) (value interface{}, exists bool)
+
+		Values() *Store
+		ViewData(key string, value interface{})
+		GetViewData() map[string]interface{}
 
 		GetView() View
 
@@ -99,6 +105,10 @@ type (
 		multipartFormParsed bool
 	}
 )
+
+func (c *Ctx) Application() *App {
+	return c.app
+}
 
 func (c *Ctx) GetView() View {
 	return c.app.view
@@ -235,6 +245,7 @@ func (c *Ctx) Set(key string, value interface{}) {
 		c.data = make(map[string]interface{})
 	}
 	c.data[key] = value
+	// c.values.Set(key, value)
 }
 
 func (c *Ctx) Get(key string) (value interface{}, exists bool) {
@@ -501,4 +512,59 @@ func (c *Ctx) MustQueryString(name string, d string) string {
 		return d
 	}
 	return val
+}
+
+// Values returns the current "user" storage.
+// Named path parameters and any optional data can be saved here.
+// This storage, as the whole context, is per-request lifetime.
+//
+// You can use this function to Set and Get local values
+// that can be used to share information between handlers and middleware.
+func (ctx *Ctx) Values() *Store {
+	return &ctx.values
+}
+
+// Set view data by key and value
+func (ctx *Ctx) ViewData(key string, value interface{}) {
+	viewDataContextKey := ctx.app.ConfigurationReadOnly().GetViewDataContextKey()
+	if key == "" {
+		ctx.values.Set(viewDataContextKey, value)
+		return
+	}
+
+	v := ctx.values.Get(viewDataContextKey)
+	if v == nil {
+		ctx.values.Set(viewDataContextKey, M{key: value})
+		return
+	}
+
+	if data, ok := v.(M); ok {
+		data[key] = value
+	}
+}
+
+// GetViewData returns the values registered by `context#ViewData`.
+// The return value is `map[string]interface{}`, this means that
+// if a custom struct registered to ViewData then this function
+// will try to parse it to map, if failed then the return value is nil
+// A check for nil is always a good practise if different
+// kind of values or no data are registered via `ViewData`.
+//
+// Similarly to `viewData := ctx.Values().Get("rock.view.data")` or
+// `viewData := ctx.Values().Get(ctx.Application().ConfigurationReadOnly().GetViewDataContextKey())`.
+func (ctx *Ctx) GetViewData() map[string]interface{} {
+	if v := ctx.values.Get(ctx.app.ConfigurationReadOnly().GetViewDataContextKey()); v != nil {
+		// if pure map[string]interface{}
+		if viewData, ok := v.(M); ok {
+			return viewData
+		}
+
+		// if struct, convert it to map[string]interface{}
+		if structs.IsStruct(v) {
+			return structs.Map(v)
+		}
+	}
+
+	// if no values found, then return nil
+	return nil
 }
