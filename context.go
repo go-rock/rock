@@ -57,7 +57,7 @@ type (
 
 		// binding
 		Decode(v interface{}, args ...interface{}) (err error)
-		ShouldBindJSON(v interface{}, args ...interface{}) (err error)
+		ShouldBind(v interface{}, args ...interface{}) (err error)
 
 		// Methods
 		Abort()
@@ -355,7 +355,7 @@ func (c *Ctx) Decode(v interface{}, args ...interface{}) (err error) {
 	return
 }
 
-func (c *Ctx) ShouldBindJSON(v interface{}, args ...interface{}) (err error) {
+func (c *Ctx) ShouldBind(v interface{}, args ...interface{}) (err error) {
 	err = c.Decode(v, args...)
 	if err != nil {
 		return err
