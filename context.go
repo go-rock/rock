@@ -23,6 +23,7 @@ const (
 type (
 	Context interface {
 		Application() *App
+		ResetRequest(r *http.Request)
 		Request() *http.Request
 		Writer() http.ResponseWriter
 		Next()
@@ -108,6 +109,10 @@ type (
 
 func (c *Ctx) Application() *App {
 	return c.app
+}
+
+func (c *Ctx) ResetRequest(r *http.Request) {
+	c.request = r
 }
 
 func (c *Ctx) GetView() View {
