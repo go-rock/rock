@@ -69,6 +69,38 @@ func (group *RouterGroup) Use(middlewares ...HandlerFunc) {
 	group.middlewares = append(group.middlewares, middlewares...)
 }
 
+// UseFunc 添加函数类型的中间件
+func (group *RouterGroup) UseFunc(middlewares ...func(Context)) {
+	for _, middleware := range middlewares {
+		group.middlewares = append(group.middlewares, HandlerFunc(middleware))
+	}
+}
+
+// UseWithPriority 添加带优先级的中间件
+func (group *RouterGroup) UseWithPriority(priority int, middleware HandlerFunc) {
+	// 简单的优先级实现：在指定位置插入
+	if priority <= 0 {
+		group.middlewares = append([]HandlerFunc{middleware}, group.middlewares...)
+	} else if priority >= len(group.middlewares) {
+		group.middlewares = append(group.middlewares, middleware)
+	} else {
+		// 在指定位置插入
+		group.middlewares = append(group.middlewares[:priority], append([]HandlerFunc{middleware}, group.middlewares[priority:]...)...)
+	}
+}
+
+// RemoveMiddleware 移除指定索引的中间件
+func (group *RouterGroup) RemoveMiddleware(index int) {
+	if index >= 0 && index < len(group.middlewares) {
+		group.middlewares = append(group.middlewares[:index], group.middlewares[index+1:]...)
+	}
+}
+
+// ClearMiddleware 清除所有中间件
+func (group *RouterGroup) ClearMiddleware() {
+	group.middlewares = []HandlerFunc{}
+}
+
 func (group *RouterGroup) NoRoute(handler HandlerFunc) {
 	group.app.router.noRoute = handler
 }
@@ -82,7 +114,11 @@ func (group *RouterGroup) createStaticHandler(relativePath string, fs http.FileS
 	absolutePath := path.Join(group.prefix, relativePath)
 	fileServer := http.StripPrefix(absolutePath, http.FileServer(fs))
 	return func(c Context) {
-		file := c.Param("filepath").(string)
+		file, ok := c.Param("filepath").(string)
+		if !ok {
+			c.Status(http.StatusBadRequest)
+			return
+		}
 		// Check if file exists and/or if we have permission to access it
 		if _, err := fs.Open(file); err != nil {
 			c.Status(http.StatusNotFound)

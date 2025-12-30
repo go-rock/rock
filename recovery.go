@@ -2,26 +2,11 @@ package rock
 
 import (
 	"fmt"
-	"log"
-	"net/http"
 	"runtime"
 	"strings"
 )
 
-// print stack trace for debug
-// func trace(message string) string {
-// 	var pcs [32]uintptr
-// 	n := runtime.Callers(3, pcs[:]) // skip first 3 caller
-
-// 	var str strings.Builder
-// 	str.WriteString(message + "\nTraceback:")
-// 	for _, pc := range pcs[:n] {
-// 		fn := runtime.FuncForPC(pc)
-// 		file, line := fn.FileLine(pc)
-// 		str.WriteString(fmt.Sprintf("\n\t%s:%d", file, line))
-// 	}
-// 	return str.String()
-// }
+// trace 获取堆栈跟踪信息
 func trace(message string) string {
 	var pcs [32]uintptr
 	n := runtime.Callers(3, pcs[:])
@@ -41,13 +26,17 @@ func trace(message string) string {
 	return str.String()
 }
 
+// Recovery 中间件：处理panic恢复
 func Recovery() HandlerFunc {
 	return func(c Context) {
 		defer func() {
 			if err := recover(); err != nil {
 				message := fmt.Sprintf("%s", err)
-				log.Printf("%s\n\n", trace(message))
-				c.Fail(http.StatusInternalServerError, "Internal Server Error")
+				// 记录错误日志
+				fmt.Printf("%s\n\n", trace(message))
+				
+				// 使用统一的错误处理
+				HandlePanic(c, message)
 			}
 		}()
 

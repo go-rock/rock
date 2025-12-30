@@ -1,7 +1,8 @@
 package rock
 
 import (
-	"strings"
+	// "log"
+	// "strings"
 )
 
 func (c *Ctx) HTML(name string, viewData ...interface{}) {
@@ -17,19 +18,7 @@ func (ctx *Ctx) ViewEngine(engine ViewEngine) {
 }
 
 func ensureTemplateName(s string, v ViewEngine) string {
-	if s == "" {
-		return s
-	}
-
-	s = strings.TrimPrefix(s, "/")
-
-	if ext := v.Ext(); ext != "" {
-		if !strings.HasSuffix(s, ext) {
-			return s + ext
-		}
-	}
-
-	return s
+	return EnsureTemplateName(s, v)
 }
 
 func (ctx *Ctx) renderView(filename string, optionalViewModel ...interface{}) error {
@@ -46,7 +35,7 @@ func (ctx *Ctx) renderView(filename string, optionalViewModel ...interface{}) er
 	if key := cfg.GetViewEngineContextKey(); key != "" {
 		if engineV := ctx.values.Get(key); engineV != nil {
 			if engine, ok := engineV.(ViewEngine); ok {
-				// filename := ensureTemplateName(filename, engine)
+				filename := ensureTemplateName(filename, engine)
 				return engine.ExecuteWriter(ctx, filename, bindingData)
 			}
 		}

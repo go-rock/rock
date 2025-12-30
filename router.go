@@ -28,9 +28,9 @@ func NewRouter(opts ...trie.Options) *Router {
 // 	r.Handle(http.MethodGet, pattern, handler)
 // }
 
-func (r *Router) Handle(method, pattern string, handler HandlerFunc) {
+func (r *Router) Handle(method, pattern string, handler HandlerFunc) error {
 	if method == "" {
-		panic(fmt.Errorf("invalid method"))
+		return fmt.Errorf("invalid method")
 	}
 	// if r.prefix != "" {
 	// 	pattern = r.prefix + pattern
@@ -39,6 +39,7 @@ func (r *Router) Handle(method, pattern string, handler HandlerFunc) {
 	hds = append(hds, handler)
 	debugPrintRoute(method, pattern, hds)
 	r.trie.Define(pattern).Handle(strings.ToUpper(method), handler)
+	return nil
 }
 
 // func(r *Router) handle(c htt)
@@ -66,18 +67,25 @@ func (r *Router) handle(c *Ctx) {
 			return
 		}
 		if r.noRoute == nil {
-			http.Error(w, fmt.Sprintf(`"%s" not implemented`, path), 501)
+			// 使用统一的错误处理
+			WriteError(c, 501, NewAppError(ErrInternalServer, "Route Not Implemented"))
 			return
 		}
 		handler = r.noRoute
 	} else {
 		// ok := false
 		hd := res.Node.GetHandler(method)
-		handler, _ = hd.(HandlerFunc)
-		// handler = r.wrapHandler(hd)
-		// if !ok {
-		// 	panic("handler error")
-		// }
+		if hf, ok := hd.(HandlerFunc); ok {
+			handler = hf
+		} else {
+			// 尝试包装其他类型的处理器
+			wrappedHandler, err := r.wrapHandler(hd)
+			if err != nil {
+				WriteError(c, 500, NewAppError(ErrInternalServer, fmt.Sprintf("Invalid handler for %s %s: %v", method, path, err)))
+				return
+			}
+			handler = wrappedHandler
+		}
 		if handler == nil {
 			// OPTIONS support
 			if method == http.MethodOptions {
@@ -87,9 +95,8 @@ func (r *Router) handle(c *Ctx) {
 			}
 
 			if r.noMethod == nil {
-				// If no route handler is returned, it's a 405 error
-				w.Header().Set("Allow", res.Node.GetAllow())
-				http.Error(w, fmt.Sprintf(`"%s" not allowed in "%s"`, method, path), 405)
+				// 使用统一的错误处理
+				WriteError(c, 405, NewAppError(ErrMethodNotAllow, fmt.Sprintf(`Method "%s" not allowed in "%s"`, method, path)))
 				return
 			}
 			handler = r.noMethod

@@ -52,8 +52,6 @@ func (v *View) Registered() bool {
 
 // ExecuteWriter calls the correct view Engine's ExecuteWriter func
 func (v *View) ExecuteWriter(w io.Writer, filename string, bindingData interface{}) error {
-	filename = EnsureTemplateName(filename, v.Engine)
-
 	return v.Engine.ExecuteWriter(w, filename, bindingData)
 }
 

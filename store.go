@@ -1,6 +1,9 @@
 package rock
 
-import "reflect"
+import (
+	"reflect"
+	"sync"
+)
 
 type (
 	ValueSetter interface {
@@ -11,23 +14,62 @@ type (
 		ValueRaw  interface{} `json:"value" msgpack:"value" yaml:"Value" toml:"Value"`
 		immutable bool        // if true then it can't change by its caller.
 	}
-	Store []Entry
+	
+	// Store 保持与现有代码的兼容性，但添加性能优化
+	Store struct {
+		entries []Entry
+		index   map[string]int // 添加索引以提高查找性能
+		mu      sync.RWMutex   // 添加互斥锁以支持并发访问
+	}
 )
+
+// 创建新的Store实例
+func NewStore() *Store {
+	return &Store{
+		entries: make([]Entry, 0),
+		index:   make(map[string]int),
+	}
+}
+
+// 初始化Store以适配现有代码
+func (s *Store) init() {
+	if s.entries == nil {
+		s.entries = make([]Entry, 0)
+	}
+	if s.index == nil {
+		s.index = make(map[string]int)
+	}
+}
 
 func (r *Store) Set(key string, value interface{}) (Entry, bool) {
 	return r.Save(key, value, false)
 }
 
 func (r *Store) Save(key string, value interface{}, immutable bool) (Entry, bool) {
-	args := *r
-	// n := len(args)
-	// add
+	r.init()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	
+	// 检查key是否已存在
+	if idx, exists := r.index[key]; exists {
+		// 更新现有条目
+		r.entries[idx] = Entry{
+			Key:       key,
+			ValueRaw:  value,
+			immutable: immutable,
+		}
+		return r.entries[idx], true
+	}
+	
+	// 添加新条目
 	kv := Entry{
 		Key:       key,
 		ValueRaw:  value,
 		immutable: immutable,
 	}
-	*r = append(args, kv)
+	idx := len(r.entries)
+	r.entries = append(r.entries, kv)
+	r.index[key] = idx
 	return kv, true
 }
 
@@ -41,6 +83,10 @@ func (r *Store) Get(key string) interface{} {
 // If not found returns "def".
 // This function checks for immutability as well, the rest don't.
 func (r *Store) GetDefault(key string, def interface{}) interface{} {
+	r.init()
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	
 	v, ok := r.GetEntry(key)
 	if !ok || v.ValueRaw == nil {
 		return def
@@ -84,13 +130,12 @@ var emptyEntry Entry
 // GetEntry returns a pointer to the "Entry" found with the given "key"
 // if nothing found then it returns an empty Entry and false.
 func (r *Store) GetEntry(key string) (Entry, bool) {
-	args := *r
-	n := len(args)
-	for i := 0; i < n; i++ {
-		if kv := args[i]; kv.Key == key {
-			return kv, true
-		}
+	r.init()
+	
+	// 使用索引快速查找
+	if idx, exists := r.index[key]; exists && idx < len(r.entries) {
+		return r.entries[idx], true
 	}
-
+	
 	return emptyEntry, false
 }

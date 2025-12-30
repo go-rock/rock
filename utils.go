@@ -1,31 +1,30 @@
 package rock
 
 import (
-	"log"
+	"fmt"
 	"mime"
 	"net/http"
 	"path/filepath"
 	"strings"
 )
 
-func (m *Router) wrapHandler(h interface{}) HandlerFunc {
+func (m *Router) wrapHandler(h interface{}) (HandlerFunc, error) {
 	switch h := h.(type) {
 	case HandlerFunc:
-		return h
+		return h, nil
 	case func(Context):
-		return h
+		return h, nil
 	case func(http.ResponseWriter, *http.Request):
 		return func(c Context) {
 			h(c.Writer(), c.Request())
-		}
+		}, nil
 	default:
-		panic("unknown handler")
+		return nil, fmt.Errorf("unknown handler type: %T", h)
 	}
 }
 
 // Get filename by viewEngine
 func EnsureTemplateName(s string, v ViewEngine) string {
-	log.Printf("name %s %s", s, v.Ext())
 	if s == "" {
 		return s
 	}

@@ -1,0 +1,37 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>多文件上传示例</title>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .upload-form { max-width: 600px; margin: 0 auto; }
+        .form-group { margin: 15px 0; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="file"] { width: 100%; padding: 8px; }
+        button { background: #28a745; color: white; padding: 10px 20px; border: none; cursor: pointer; }
+        button:hover { background: #1e7e34; }
+        .back-link { margin-top: 20px; }
+        .back-link a { color: #007bff; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="upload-form">
+        <h1>多文件上传示例</h1>
+        <form action="/upload/multiple" method="post" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="files">选择多个文件:</label>
+                <input type="file" id="files" name="files" multiple required>
+                <small>支持选择多个文件</small>
+            </div>
+            <button type="submit">上传所有文件</button>
+        </form>
+        <div class="back-link">
+            <a href="/upload">返回单文件上传</a>
+        </div>
+    </div>
+</body>
+</html>

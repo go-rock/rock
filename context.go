@@ -82,6 +82,13 @@ type (
 		MustQueryString(name string, d string) string
 
 		FormFile(name string) (*multipart.FileHeader, error)
+
+	// 文件上传功能
+	SaveSingleFile(name string, config *FileUploadConfig) (*FileInfo, error)
+	SaveMultipleFiles(name string, config *FileUploadConfig) ([]*FileInfo, error)
+	UploadSingleImage(name string) (*FileInfo, error)
+	UploadSingleDocument(name string) (*FileInfo, error)
+	UploadMultipleImages(name string) ([]*FileInfo, error)
 	}
 
 	Ctx struct {
@@ -113,6 +120,16 @@ func (c *Ctx) Application() *App {
 
 func (c *Ctx) ResetRequest(r *http.Request) {
 	c.request = r
+	c.Path = r.URL.Path
+	c.Method = r.Method
+	c.statusCode = http.StatusOK
+	c.index = -1
+	c.formParsed = false
+	c.multipartFormParsed = false
+	// 重置状态数据以防止污染
+	c.params = nil
+	c.data = nil
+	// 注意：values应该保留，因为它们可能在中间件间共享
 }
 
 func (c *Ctx) GetView() View {
@@ -138,6 +155,11 @@ func (c *Ctx) newContext(w http.ResponseWriter, r *http.Request) *Ctx {
 	c.index = -1
 	c.formParsed = false
 	c.multipartFormParsed = false
+	// 重置状态数据以防止污染
+	c.params = nil
+	c.data = nil
+	// 初始化Store以确保向后兼容性
+	c.values.init()
 	return c
 }
 
@@ -150,10 +172,36 @@ func (c *Ctx) Writer() http.ResponseWriter {
 }
 
 func (c *Ctx) Next() {
+	// 安全检查：确保handlers不为空且index有效
+	if c.handlers == nil {
+		return
+	}
+
 	c.index++
 	s := len(c.handlers)
-	for ; c.index < s; c.index++ {
-		c.handlers[c.index](c)
+
+	// 执行下一个中间件或处理器
+	for c.index < s {
+		// 检查是否已经被abort（index设置为abortIndex）
+		if c.index >= abortIndex {
+			return
+		}
+
+		handler := c.handlers[c.index]
+		if handler == nil {
+			c.index++
+			continue
+		}
+
+		// 执行中间件/处理器
+		handler(c)
+		
+		// 检查是否在执行过程中被abort
+		if c.index >= abortIndex {
+			return
+		}
+		
+		c.index++
 	}
 }
 
@@ -180,16 +228,17 @@ func (c *Ctx) String(code int, format string, values ...interface{}) {
 	c.Status(code)
 	_, err := c.Write([]byte(fmt.Sprintf(format, values...)))
 	if err != nil {
-		http.Error(c.writer, err.Error(), 500)
+		WriteError(c, 500, NewAppError(ErrInternalServer, "Failed to write response"))
 	}
 }
 
 func (c *Ctx) JSON(code int, obj interface{}) {
 	c.SetHeader("Content-Type", "application/json")
 	c.Status(code)
-	encoder := json.NewEncoder(c.writer)
-	if err := encoder.Encode(obj); err != nil {
-		http.Error(c.writer, err.Error(), 500)
+	
+	// 使用统一的JSON响应写入方法
+	if err := writeJSONResponse(c.writer, obj); err != nil {
+		WriteError(c, 500, NewAppError(ErrInternalServer, "Failed to encode JSON response"))
 	}
 }
 
@@ -465,7 +514,7 @@ func (c *Ctx) MustPostInt(key string, d int) int {
 	}
 	i, err := strconv.Atoi(val)
 	if err != nil {
-		panic(err.Error())
+		return d
 	}
 
 	return i
@@ -485,14 +534,36 @@ func (c *Ctx) FormFile(name string) (*multipart.FileHeader, error) {
 	return fh, err
 }
 
+// 文件上传功能实现
+
+func (c *Ctx) SaveSingleFile(name string, config *FileUploadConfig) (*FileInfo, error) {
+	return SaveSingleFile(c, name, config)
+}
+
+func (c *Ctx) SaveMultipleFiles(name string, config *FileUploadConfig) ([]*FileInfo, error) {
+	return SaveMultipleFiles(c, name, config)
+}
+
+func (c *Ctx) UploadSingleImage(name string) (*FileInfo, error) {
+	return UploadSingleImage(c, name)
+}
+
+func (c *Ctx) UploadSingleDocument(name string) (*FileInfo, error) {
+	return UploadSingleDocument(c, name)
+}
+
+func (c *Ctx) UploadMultipleImages(name string) ([]*FileInfo, error) {
+	return UploadMultipleImages(c, name)
+}
+
 func (c *Ctx) MustParamInt(name string, d int) int {
-	val := c.Param(name).(string)
-	if val == "" {
+	val, ok := c.Param(name).(string)
+	if !ok || val == "" {
 		return d
 	}
 	i, err := strconv.Atoi(val)
 	if err != nil {
-		panic(err.Error())
+		return d
 	}
 
 	return i
@@ -505,9 +576,8 @@ func (c *Ctx) MustQueryInt(name string, d int) int {
 	}
 	i, err := strconv.Atoi(val)
 	if err != nil {
-		panic(err.Error())
+		return d
 	}
-
 	return i
 }
 

@@ -1,6 +1,7 @@
 package binding
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 
@@ -37,7 +38,7 @@ func ValidatorError(err error) CommonError {
 	return res
 }
 
-func InitBinding() {
+func InitBinding() error {
 	zhs := zh.New()
 	uni = ut.New(zhs)
 
@@ -45,11 +46,12 @@ func InitBinding() {
 
 	if v, ok := Validator.Engine().(*validator.Validate); ok {
 		if err := zh_translations.RegisterDefaultTranslations(v, Trans); err != nil {
-			panic(err)
+			return fmt.Errorf("failed to register default translations: %v", err)
 		}
 
 		v.RegisterTagNameFunc(func(fld reflect.StructField) string {
 			return fld.Tag.Get("comment")
 		})
 	}
+	return nil
 }
