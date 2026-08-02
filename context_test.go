@@ -1,0 +1,589 @@
+package rock
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"mime/multipart"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestContextBasic(t *testing.T) {
+	app := New()
+
+	app.Get("/test", func(c Context) {
+		// 测试设置数据
+		c.Set("key", "value")
+		if val, exists := c.Get("key"); !exists || val != "value" {
+			t.Error("Failed to set/get data")
+		}
+
+		// 测试JSON响应
+		c.JSON(200, M{
+			"status": "ok",
+			"method": c.GetMethod(),
+			"path":   c.GetPath(),
+		})
+	})
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	client := server.Client()
+
+	resp, err := client.Get(server.URL + "/test")
+	if err != nil {
+		t.Fatalf("Failed to GET /test: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		t.Errorf("Expected status 200, got %d", resp.StatusCode)
+	}
+
+	if ct := resp.Header.Get("Content-Type"); ct != "application/json" {
+		t.Errorf("Expected Content-Type application/json, got %s", ct)
+	}
+
+	// 验证响应内容
+	body, _ := io.ReadAll(resp.Body)
+	var result M
+	if err := json.Unmarshal(body, &result); err != nil {
+		t.Errorf("Failed to unmarshal response: %v", err)
+	}
+
+	if result["status"] != "ok" {
+		t.Errorf("Expected status ok, got %v", result["status"])
+	}
+}
+
+func TestContextParams(t *testing.T) {
+	app := New()
+
+	app.Get("/user/:id", func(c Context) {
+		id := c.Param("id")
+		name, _ := c.GetQuery("name") // 从查询参数获取name
+
+		c.JSON(200, M{
+			"id":   id,
+			"name": name,
+		})
+	})
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	client := server.Client()
+
+	resp, err := client.Get(server.URL + "/user/123?name=john")
+	if err != nil {
+		t.Fatalf("Failed to GET /user/123: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	var result M
+	json.Unmarshal(body, &result)
+
+	if result["id"] != "123" {
+		t.Errorf("Expected id 123, got %v", result["id"])
+	}
+	if result["name"] != "john" {
+		t.Errorf("Expected name john, got %v", result["name"])
+	}
+}
+
+func TestContextQuery(t *testing.T) {
+	app := New()
+
+	app.Get("/search", func(c Context) {
+		q := c.Query("q")
+		limit := c.Query("limit")
+		page := c.QueryInt("page")
+
+		c.JSON(200, M{
+			"query": q,
+			"limit": limit,
+			"page":  page,
+		})
+	})
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	client := server.Client()
+
+	resp, err := client.Get(server.URL + "/search?q=test&limit=10&page=2")
+	if err != nil {
+		t.Fatalf("Failed to GET /search: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	var result M
+	json.Unmarshal(body, &result)
+
+	if result["query"] != "test" {
+		t.Errorf("Expected query test, got %v", result["query"])
+	}
+	if result["limit"] != "10" {
+		t.Errorf("Expected limit 10, got %v", result["limit"])
+	}
+	// JSON 反序列化时数字会被解析为 float64
+	if pageFloat, ok := result["page"].(float64); !ok || pageFloat != 2 {
+		t.Errorf("Expected page 2, got %v", result["page"])
+	}
+}
+
+func TestContextClientIP(t *testing.T) {
+	app := New()
+
+	app.Get("/ip", func(c Context) {
+		ip := c.ClientIP()
+		c.JSON(200, M{"ip": ip})
+	})
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	client := server.Client()
+
+	resp, err := client.Get(server.URL + "/ip")
+	if err != nil {
+		t.Fatalf("Failed to GET /ip: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	var result M
+	json.Unmarshal(body, &result)
+
+	// 测试客户端IP获取
+	ip := result["ip"].(string)
+	if ip == "" {
+		t.Error("Failed to get client IP")
+	}
+}
+
+func TestContextFormParsing(t *testing.T) {
+	app := New()
+
+	app.Post("/form", func(c Context) {
+		if err := c.ParseForm(); err != nil {
+			t.Errorf("Failed to parse form: %v", err)
+			c.JSON(400, M{"error": err.Error()})
+			return
+		}
+
+		username := c.Query("username")
+		email := c.Query("email")
+
+		c.JSON(200, M{
+			"username": username,
+			"email":    email,
+		})
+	})
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	client := server.Client()
+
+	// 创建表单数据
+	form := url.Values{}
+	form.Add("username", "testuser")
+	form.Add("email", "test@example.com")
+
+	resp, err := client.PostForm(server.URL+"/form", form)
+	if err != nil {
+		t.Fatalf("Failed to POST /form: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		t.Errorf("Expected status 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestContextMultipartForm(t *testing.T) {
+	app := New()
+
+	app.Post("/multipart", func(c Context) {
+		if err := c.ParseMultipartForm(10 << 20); err != nil { // 10MB
+			c.JSON(400, M{"error": err.Error()})
+			return
+		}
+
+		// 测试表单字段
+		name := c.Query("name")
+		desc := c.Query("description")
+
+		// 测试文件
+		file, header, err := c.Request().FormFile("file")
+		if err == nil {
+			defer file.Close()
+		}
+
+		c.JSON(200, M{
+			"name":        name,
+			"description": desc,
+			"file_name":   header.Filename,
+		})
+	})
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	client := server.Client()
+
+	// 创建multipart表单
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	// 添加文本字段
+	writer.WriteField("name", "test file")
+	writer.WriteField("description", "test description")
+
+	// 添加文件
+	fileWriter, _ := writer.CreateFormFile("file", "test.txt")
+	fileWriter.Write([]byte("test file content"))
+
+	writer.Close()
+
+	req, _ := http.NewRequest("POST", server.URL+"/multipart", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("Failed to POST /multipart: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		t.Errorf("Expected status 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestContextAbort(t *testing.T) {
+	app := New()
+
+	var middlewareExecuted bool
+	var handlerExecuted bool
+
+	app.Use(func(c Context) {
+		middlewareExecuted = true
+		c.Next()
+		if c.StatusCode() == 200 {
+			t.Error("Expected status to be changed by handler")
+		}
+	})
+
+	app.Get("/abort", func(c Context) {
+		handlerExecuted = true
+		c.AbortWithStatusJSON(403, M{"error": "forbidden"})
+	})
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	client := server.Client()
+
+	resp, err := client.Get(server.URL + "/abort")
+	if err != nil {
+		t.Fatalf("Failed to GET /abort: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 403 {
+		t.Errorf("Expected status 403, got %d", resp.StatusCode)
+	}
+
+	if !middlewareExecuted {
+		t.Error("Middleware was not executed")
+	}
+
+	if !handlerExecuted {
+		t.Error("Handler was not executed")
+	}
+}
+
+func TestContextRedirect(t *testing.T) {
+	app := New()
+
+	app.Get("/redirect", func(c Context) {
+		c.Redirect("/target")
+	})
+
+	app.Get("/target", func(c Context) {
+		c.String(200, "redirected")
+	})
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	client := server.Client()
+
+	// 测试重定向
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse // 不要自动跟随重定向
+	}
+
+	resp, err := client.Get(server.URL + "/redirect")
+	if err != nil {
+		t.Fatalf("Failed to GET /redirect: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 302 && resp.StatusCode != 307 {
+		t.Errorf("Expected redirection status, got %d", resp.StatusCode)
+	}
+
+	location := resp.Header.Get("Location")
+	if !strings.Contains(location, "/target") {
+		t.Errorf("Expected redirect to /target, got %s", location)
+	}
+}
+
+func TestContextWriter(t *testing.T) {
+	app := New()
+
+	app.Get("/write", func(c Context) {
+		// 测试直接写入
+		n, err := c.Write([]byte("hello"))
+		if err != nil {
+			t.Errorf("Failed to write: %v", err)
+		}
+		if n != 5 {
+			t.Errorf("Expected to write 5 bytes, got %d", n)
+		}
+	})
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	client := server.Client()
+
+	resp, err := client.Get(server.URL + "/write")
+	if err != nil {
+		t.Fatalf("Failed to GET /write: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if string(body) != "hello" {
+		t.Errorf("Expected 'hello', got '%s'", string(body))
+	}
+}
+
+func TestContextFail(t *testing.T) {
+	app := New()
+
+	app.Get("/fail", func(c Context) {
+		c.Fail(400, "bad request")
+	})
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	client := server.Client()
+
+	resp, err := client.Get(server.URL + "/fail")
+	if err != nil {
+		t.Fatalf("Failed to GET /fail: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 400 {
+		t.Errorf("Expected status 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestContextString(t *testing.T) {
+	app := New()
+
+	app.Get("/string", func(c Context) {
+		c.String(200, "Hello %s", "World")
+	})
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	client := server.Client()
+
+	resp, err := client.Get(server.URL + "/string")
+	if err != nil {
+		t.Fatalf("Failed to GET /string: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if string(body) != "Hello World" {
+		t.Errorf("Expected 'Hello World', got '%s'", string(body))
+	}
+}
+
+func TestContextXML(t *testing.T) {
+	app := New()
+
+	app.Get("/xml", func(c Context) {
+		type User struct {
+			Name string `xml:"name"`
+			Age  int    `xml:"age"`
+		}
+
+		user := User{Name: "John", Age: 30}
+		c.XML(200, user)
+	})
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	client := server.Client()
+
+	resp, err := client.Get(server.URL + "/xml")
+	if err != nil {
+		t.Fatalf("Failed to GET /xml: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if ct := resp.Header.Get("Content-Type"); !strings.Contains(ct, "xml") {
+		t.Errorf("Expected XML content type, got %s", ct)
+	}
+}
+
+func TestContextContextPool(t *testing.T) {
+	app := New()
+
+	var firstRequestID string
+	var secondRequestID string
+
+	app.Use(func(c Context) {
+		// 设置请求ID
+		requestID := fmt.Sprintf("req_%d", time.Now().UnixNano())
+		c.Set("request_id", requestID)
+		c.Next()
+
+		if c.Request().URL.Path == "/first" {
+			if val, exists := c.Get("request_id"); exists {
+				firstRequestID = val.(string)
+			}
+		} else if c.Request().URL.Path == "/second" {
+			if val, exists := c.Get("request_id"); exists {
+				secondRequestID = val.(string)
+			}
+		}
+	})
+
+	app.Get("/first", func(c Context) {
+		c.String(200, "first")
+	})
+
+	app.Get("/second", func(c Context) {
+		c.String(200, "second")
+	})
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	client := server.Client()
+
+	// 第一个请求
+	resp1, _ := client.Get(server.URL + "/first")
+	resp1.Body.Close()
+
+	// 第二个请求
+	resp2, _ := client.Get(server.URL + "/second")
+	resp2.Body.Close()
+
+	// 验证请求ID不同（对象池正确工作）
+	if firstRequestID == "" || secondRequestID == "" {
+		t.Error("Request IDs were not set")
+	}
+
+	if firstRequestID == secondRequestID {
+		t.Error("Context pool did not work correctly - request IDs are the same")
+	}
+}
+
+func TestContextMustMethods(t *testing.T) {
+	app := New()
+
+	app.Post("/must", func(c Context) {
+		// 测试MustPostInt
+		page := c.MustPostInt("page", 1)
+		if page != 10 {
+			t.Errorf("Expected page 10, got %d", page)
+		}
+
+		// 测试MustPostString
+		name := c.MustPostString("name", "default")
+		if name != "test" {
+			t.Errorf("Expected name test, got %s", name)
+		}
+
+		// 测试MustPostInt - 应该从POST表单数据中获取
+		limit := c.MustPostInt("limit", 20)
+		if limit != 5 {
+			t.Errorf("Expected limit 5, got %d", limit)
+		}
+
+		// 测试默认值
+		defaultPage := c.MustPostInt("missing", 99)
+		if defaultPage != 99 {
+			t.Errorf("Expected default page 99, got %d", defaultPage)
+		}
+
+		c.String(200, "ok")
+	})
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	client := server.Client()
+
+	// 创建表单数据
+	form := url.Values{}
+	form.Add("page", "10")
+	form.Add("name", "test")
+	form.Add("limit", "5")
+
+	resp, err := client.PostForm(server.URL+"/must", form)
+	if err != nil {
+		t.Fatalf("Failed to POST /must: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		t.Errorf("Expected status 200, got %d", resp.StatusCode)
+	}
+}
+
+func BenchmarkContext(b *testing.B) {
+	app := New()
+
+	handler := func(c Context) {
+		c.JSON(200, M{
+			"path":   c.GetPath(),
+			"method": c.GetMethod(),
+			"status": c.StatusCode(),
+		})
+	}
+
+	app.Get("/test", handler)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		// 创建模拟请求避免网络端口冲突
+		req := httptest.NewRequest("GET", "/test", nil)
+		w := httptest.NewRecorder()
+		
+		app.ServeHTTP(w, req)
+	}
+}

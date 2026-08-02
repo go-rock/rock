@@ -23,7 +23,43 @@ func (c HandlersChain) Last() HandlerFunc {
 var DefaultWriter io.Writer = os.Stdout
 
 func IsDebugging() bool {
-	return true
+	// 在测试环境中开启调试输出，生产环境中关闭
+	// 通过检查调用堆栈来判断是否在测试环境中
+	return isInTestContext()
+}
+
+// isInTestContext 检测当前调用是否在测试环境中
+func isInTestContext() bool {
+	// 检查环境变量（CI、测试标志等）
+	if os.Getenv("CI") != "" || os.Getenv("TESTING") != "" {
+		return true
+	}
+
+	// 检查调用堆栈中是否包含测试函数
+	pc := make([]uintptr, 10)
+	n := runtime.Callers(2, pc) // 跳过当前函数和IsDebugging函数
+	if n == 0 {
+		return false
+	}
+
+	frames := runtime.CallersFrames(pc[:n])
+	for {
+		frame, more := frames.Next()
+		funcName := frame.Function
+		
+		// 检查函数名是否包含测试相关标识
+		if strings.Contains(funcName, "Test") || 
+		   strings.Contains(funcName, "Benchmark") ||
+		   strings.Contains(funcName, "testing.") {
+			return true
+		}
+		
+		if !more {
+			break
+		}
+	}
+	
+	return false
 }
 
 func nameOfFunction(f interface{}) string {

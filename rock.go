@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/go-playground/form/v4"
 	log "github.com/kataras/golog"
@@ -25,10 +26,39 @@ type App struct {
 	// template
 	config *Configuration
 	view   View
+
+	// logging
+	logger *RockLogger
 }
 
 func (app *App) GetView() View {
 	return app.view
+}
+
+// Logger 配置日志系统
+func (app *App) Logger() *RockLogger {
+	return app.logger
+}
+
+// SetLogLevel 设置日志级别
+func (app *App) SetLogLevel(level LogLevel) {
+	if app.logger != nil {
+		app.logger.SetLevel(level)
+	}
+}
+
+// SetLoggerOutput 设置日志输出目标
+func (app *App) SetLoggerOutput(outputs ...io.Writer) {
+	if app.logger != nil {
+		app.logger.SetOutputs(outputs...)
+	}
+}
+
+// EnableRequestLog 启用或禁用请求日志
+func (app *App) EnableRequestLog(enabled bool) {
+	if app.logger != nil {
+		app.logger.EnableRequestLog(enabled)
+	}
 }
 
 func New() *App {
@@ -36,6 +66,7 @@ func New() *App {
 	app := &App{
 		config: &config,
 		router: NewRouter(),
+		logger: NewLogger(),
 	}
 	app.RouterGroup = &RouterGroup{app: app}
 	app.groups = []*RouterGroup{app.RouterGroup}
@@ -61,12 +92,23 @@ func (app *App) Run(args ...string) (err error) {
 	if len(args) > 0 {
 		addr = args[0]
 	}
-	debugPrint("Rock running on http://localhost%s", addr)
+	if app.logger != nil {
+		app.logger.Infof("Rock running on http://localhost%s", addr)
+	} else {
+		debugPrint("Rock running on http://localhost%s", addr)
+	}
 	return http.ListenAndServe(addr, app)
 }
 
 func (app *App) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	c := app.createContext(w, req)
+
+	// 记录请求开始时间
+	startTime := time.Now()
+
+	// 获取客户端IP
+	ip := c.ClientIP()
+	userAgent := req.UserAgent()
 
 	// 收集并按优先级排序中间件
 	middlewares := app.collectMiddlewares(req.URL.Path)
@@ -75,6 +117,13 @@ func (app *App) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// 执行路由处理
 	app.router.handle(c)
 
+	// 记录请求日志
+	if app.logger != nil {
+		statusCode := c.StatusCode()
+		latency := time.Since(startTime)
+		app.logger.RequestLog(req.Method, req.URL.Path, ip, userAgent, statusCode, latency)
+	}
+
 	// 释放Context到对象池
 	app.pool.Put(c)
 }
@@ -82,7 +131,7 @@ func (app *App) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 // collectMiddlewares 收集并排序中间件
 func (app *App) collectMiddlewares(path string) []HandlerFunc {
 	type middlewareWithPriority struct {
-		handler HandlerFunc
+		handler  HandlerFunc
 		priority int
 	}
 
@@ -93,9 +142,9 @@ func (app *App) collectMiddlewares(path string) []HandlerFunc {
 		if strings.HasPrefix(path, group.prefix) && len(group.middlewares) > 0 {
 			for i, handler := range group.middlewares {
 				// 简单的优先级策略：group的深度和中间件在组中的位置
-				priority := len(group.prefix) * 100 + i
+				priority := len(group.prefix)*100 + i
 				middlewareList = append(middlewareList, middlewareWithPriority{
-					handler: handler,
+					handler:  handler,
 					priority: priority,
 				})
 			}

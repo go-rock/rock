@@ -15,42 +15,42 @@ import (
 type FileUploadConfig struct {
 	// 文件大小限制 (字节)
 	MaxFileSize int64
-	
+
 	// 允许的文件类型
 	AllowedExtensions []string
-	
+
 	// 允许的MIME类型
 	AllowedMimeTypes []string
-	
+
 	// 保存目录
 	SaveDir string
-	
+
 	// 是否生成唯一文件名
 	GenerateUniqueName bool
-	
+
 	// 文件名前缀
 	FilenamePrefix string
 }
 
 // FileInfo 文件信息
 type FileInfo struct {
-	Header        *multipart.FileHeader `json:"header"`
-	Filename      string                `json:"filename"`
-	Extension     string                `json:"extension"`
-	Size          int64                 `json:"size"`
-	MIMEType      string                `json:"mime_type"`
-	SavedPath     string                `json:"saved_path,omitempty"`
-	URL           string                `json:"url,omitempty"`
-	UploadTime    time.Time             `json:"upload_time"`
+	Header     *multipart.FileHeader `json:"header"`
+	Filename   string                `json:"filename"`
+	Extension  string                `json:"extension"`
+	Size       int64                 `json:"size"`
+	MIMEType   string                `json:"mime_type"`
+	SavedPath  string                `json:"saved_path,omitempty"`
+	URL        string                `json:"url,omitempty"`
+	UploadTime time.Time             `json:"upload_time"`
 }
 
 // DefaultFileUploadConfig 获取默认文件上传配置
 func DefaultFileUploadConfig() *FileUploadConfig {
 	return &FileUploadConfig{
-		MaxFileSize:       10 * 1024 * 1024, // 10MB
-		AllowedExtensions: []string{".jpg", ".jpeg", ".png", ".gif", ".pdf", ".doc", ".docx", ".txt"},
-		AllowedMimeTypes:  []string{"image/jpeg", "image/png", "image/gif", "application/pdf", "text/plain"},
-		SaveDir:           "uploads",
+		MaxFileSize:        10 * 1024 * 1024, // 10MB
+		AllowedExtensions:  []string{".jpg", ".jpeg", ".png", ".gif", ".pdf", ".doc", ".docx", ".txt"},
+		AllowedMimeTypes:   []string{"image/jpeg", "image/png", "image/gif", "application/pdf", "text/plain"},
+		SaveDir:            "uploads",
 		GenerateUniqueName: true,
 	}
 }
@@ -63,7 +63,7 @@ func ValidateFile(fh *multipart.FileHeader, config *FileUploadConfig) error {
 
 	// 检查文件大小
 	if config.MaxFileSize > 0 && fh.Size > config.MaxFileSize {
-		return NewAppErrorWithDetail(ErrBadRequest, 
+		return NewAppErrorWithDetail(ErrBadRequest,
 			fmt.Sprintf("File size exceeds limit: %d bytes", config.MaxFileSize),
 			fmt.Sprintf("File size: %d bytes", fh.Size))
 	}
@@ -79,7 +79,7 @@ func ValidateFile(fh *multipart.FileHeader, config *FileUploadConfig) error {
 			}
 		}
 		if !allowed {
-			return NewAppErrorWithDetail(ErrBadRequest, 
+			return NewAppErrorWithDetail(ErrBadRequest,
 				fmt.Sprintf("File extension '%s' not allowed", ext),
 				fmt.Sprintf("Allowed extensions: %v", config.AllowedExtensions))
 		}
@@ -248,9 +248,9 @@ func saveFileToDisk(fh *multipart.FileHeader, config *FileUploadConfig) (string,
 	var filename string
 	if config.GenerateUniqueName {
 		ext := getFileExtension(fh.Filename)
-		filename = fmt.Sprintf("%s%d%s", 
-			config.FilenamePrefix, 
-			time.Now().UnixNano(), 
+		filename = fmt.Sprintf("%s%d%s",
+			config.FilenamePrefix,
+			time.Now().UnixNano(),
 			ext)
 	} else {
 		filename = fh.Filename
@@ -309,7 +309,7 @@ func UploadSingleImage(c Context, name string) (*FileInfo, error) {
 	config.AllowedExtensions = []string{".jpg", ".jpeg", ".png", ".gif"}
 	config.AllowedMimeTypes = []string{"image/jpeg", "image/png", "image/gif"}
 	config.SaveDir = "uploads/images"
-	
+
 	return SaveSingleFile(c, name, config)
 }
 
@@ -319,7 +319,7 @@ func UploadSingleDocument(c Context, name string) (*FileInfo, error) {
 	config.AllowedExtensions = []string{".pdf", ".doc", ".docx", ".txt"}
 	config.AllowedMimeTypes = []string{"application/pdf", "application/msword", "text/plain"}
 	config.SaveDir = "uploads/documents"
-	
+
 	return SaveSingleFile(c, name, config)
 }
 
@@ -329,6 +329,6 @@ func UploadMultipleImages(c Context, name string) ([]*FileInfo, error) {
 	config.AllowedExtensions = []string{".jpg", ".jpeg", ".png", ".gif"}
 	config.AllowedMimeTypes = []string{"image/jpeg", "image/png", "image/gif"}
 	config.SaveDir = "uploads/images"
-	
+
 	return SaveMultipleFiles(c, name, config)
 }

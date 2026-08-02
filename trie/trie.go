@@ -51,10 +51,9 @@ var (
 
 // New returns a trie
 //
-//  trie := New()
-//  // disable IgnoreCase, TrailingSlashRedirect and FixedPathRedirect
-//  trie := New(Options{})
-//
+//	trie := New()
+//	// disable IgnoreCase, TrailingSlashRedirect and FixedPathRedirect
+//	trie := New(Options{})
 func New(args ...Options) *Trie {
 	opts := defaultOptions
 	if len(args) > 0 {
@@ -97,12 +96,12 @@ func (t *Trie) GetEndpoints() []*Node {
 
 // Define define a pattern on the trie and returns the endpoint node for the pattern.
 //
-//  trie := New()
-//  node1 := trie.Define("/a")
-//  node2 := trie.Define("/a/b")
-//  node3 := trie.Define("/a/b")
-//  // node2.parent == node1
-//  // node2 == node3
+//	trie := New()
+//	node1 := trie.Define("/a")
+//	node2 := trie.Define("/a/b")
+//	node3 := trie.Define("/a/b")
+//	// node2.parent == node1
+//	// node2 == node3
 //
 // The defined pattern can contain three types of parameters:
 //
@@ -112,7 +111,6 @@ func (t *Trie) GetEndpoints() []*Node {
 // | `:name*` | named with catch-all parameter |
 // | `:name(regexp)` | named with regexp parameter |
 // | `::name` | not named parameter, it is literal `:name` |
-//
 func (t *Trie) Define(pattern string) *Node {
 	if strings.Contains(pattern, "//") {
 		panic(fmt.Errorf(`multi-slash exist: "%s"`, pattern))
@@ -133,8 +131,7 @@ func (t *Trie) Define(pattern string) *Node {
 // Match try to match path. It will returns a Matched instance that
 // includes	*Node, Params and Tsr flag when matching success, otherwise a nil.
 //
-//  matched := trie.Match("/a/b")
-//
+//	matched := trie.Match("/a/b")
 func (t *Trie) Match(path string) *Matched {
 	if path == "" || path[0] != '/' {
 		panic(fmt.Errorf(`path is not start with "/": "%s"`, path))
@@ -249,11 +246,10 @@ func (n *Node) getChild(key string) *Node {
 
 // Handle is used to mount a handler with a method name to the node.
 //
-//  t := New()
-//  node := t.Define("/a/b")
-//  node.Handle("GET", handler1)
-//  node.Handle("POST", handler1)
-//
+//	t := New()
+//	node := t.Define("/a/b")
+//	node.Handle("GET", handler1)
+//	node.Handle("POST", handler1)
 func (n *Node) Handle(method string, handler interface{}) {
 	if n.GetHandler(method) != nil {
 		panic(fmt.Errorf(`"%s" already defined`, n.getSegments()))
@@ -269,25 +265,23 @@ func (n *Node) Handle(method string, handler interface{}) {
 // GetHandler ...
 // GetHandler returns handler by method that defined on the node
 //
-//  trie := New()
-//  trie.Define("/api").Handle("GET", func handler1() {})
-//  trie.Define("/api").Handle("PUT", func handler2() {})
+//	trie := New()
+//	trie.Define("/api").Handle("GET", func handler1() {})
+//	trie.Define("/api").Handle("PUT", func handler2() {})
 //
-//  trie.Match("/api").Node.GetHandler("GET").(func()) == handler1
-//  trie.Match("/api").Node.GetHandler("PUT").(func()) == handler2
-//
+//	trie.Match("/api").Node.GetHandler("GET").(func()) == handler1
+//	trie.Match("/api").Node.GetHandler("PUT").(func()) == handler2
 func (n *Node) GetHandler(method string) interface{} {
 	return n.handlers[method]
 }
 
 // GetAllow returns allow methods defined on the node
 //
-//  trie := New()
-//  trie.Define("/").Handle("GET", handler1)
-//  trie.Define("/").Handle("PUT", handler2)
+//	trie := New()
+//	trie.Define("/").Handle("GET", handler1)
+//	trie.Define("/").Handle("PUT", handler2)
 //
-//  // trie.Match("/").Node.GetAllow() == "GET, PUT"
-//
+//	// trie.Match("/").Node.GetAllow() == "GET, PUT"
 func (n *Node) GetAllow() string {
 	return n.allow
 }
@@ -342,6 +336,12 @@ func matchNode(parent *Node, segment string) (child *Node) {
 	// if segment == "" {
 	// 	return nil
 	// }
+
+	// 首先检查通配符匹配
+	if wildcardChild := parent.getChild("*"); wildcardChild != nil && wildcardChild.wildcard {
+		return wildcardChild
+	}
+
 	for _, child = range parent.varyChildren {
 		_segment := segment
 		if child.suffix != "" {
@@ -464,7 +464,18 @@ func parseNode(parent *Node, segment string, ignoreCase bool) *Node {
 			})
 		}
 
-	case segment[0] == '*' || segment[0] == '(' || segment[0] == ')':
+	case segment[0] == '*':
+		// 支持通配符路由，如 "/static/*"
+		if len(segment) == 1 {
+			// 单独的 "*" 表示匹配所有
+			node.wildcard = true
+			node.name = "*"
+			parent.children["*"] = node
+		} else {
+			panic(fmt.Errorf(`invalid pattern: "%s"`, node.getSegments()))
+		}
+
+	case segment[0] == '(' || segment[0] == ')':
 		panic(fmt.Errorf(`invalid pattern: "%s"`, node.getSegments()))
 
 	case segment[len(segment)-1] == '*':

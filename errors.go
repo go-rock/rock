@@ -72,7 +72,7 @@ type ErrorResponse struct {
 // WriteError 写入错误响应
 func WriteError(c Context, statusCode int, err error) {
 	var httpErr HTTPError
-	
+
 	// 根据错误类型设置响应
 	switch e := err.(type) {
 	case *AppError:
@@ -96,7 +96,7 @@ func WriteError(c Context, statusCode int, err error) {
 	}
 
 	c.Status(statusCode)
-	
+
 	// 设置Content-Type
 	c.SetHeader("Content-Type", "application/json")
 
@@ -147,7 +147,7 @@ func (e *ValidationError) Error() string {
 // ValidateRequest 验证请求参数
 func ValidateRequest(c Context, params map[string]interface{}) []ValidationError {
 	var errors []ValidationError
-	
+
 	for field, rules := range params {
 		if rules == nil || rules == "" {
 			errors = append(errors, ValidationError{
@@ -156,17 +156,19 @@ func ValidateRequest(c Context, params map[string]interface{}) []ValidationError
 			})
 		}
 	}
-	
+
 	return errors
 }
 
 // HandlePanic 处理panic恢复
 func HandlePanic(c Context, message interface{}) {
 	// 记录错误日志
-	fmt.Printf("Panic recovered: %v\n\n", message)
-	
+	if app := c.App(); app != nil && app.logger != nil {
+		app.logger.Errorf("Panic recovered: %v", message)
+	}
+
 	// 返回500错误
-	WriteError(c, http.StatusInternalServerError, 
+	WriteError(c, http.StatusInternalServerError,
 		NewAppError(ErrInternalServer, "Internal Server Error"))
 }
 

@@ -47,6 +47,8 @@ type (
 		ParseMultipartForm(maxMemory int64) error
 
 		ClientIP() (clientIP string)
+		GetMethod() string
+		GetPath() string
 		// render
 		// HTML(code int, name string, data interface{})
 		ViewEngine(engine ViewEngine)
@@ -83,12 +85,20 @@ type (
 
 		FormFile(name string) (*multipart.FileHeader, error)
 
-	// 文件上传功能
-	SaveSingleFile(name string, config *FileUploadConfig) (*FileInfo, error)
-	SaveMultipleFiles(name string, config *FileUploadConfig) ([]*FileInfo, error)
-	UploadSingleImage(name string) (*FileInfo, error)
-	UploadSingleDocument(name string) (*FileInfo, error)
-	UploadMultipleImages(name string) ([]*FileInfo, error)
+		// 文件上传功能
+		SaveSingleFile(name string, config *FileUploadConfig) (*FileInfo, error)
+		SaveMultipleFiles(name string, config *FileUploadConfig) ([]*FileInfo, error)
+		UploadSingleImage(name string) (*FileInfo, error)
+		UploadSingleDocument(name string) (*FileInfo, error)
+		UploadMultipleImages(name string) ([]*FileInfo, error)
+
+		// 日志功能
+		App() *App
+		Logger() *RockLogger
+		LogDebug(msg string, args ...interface{})
+		LogInfo(msg string, args ...interface{})
+		LogWarn(msg string, args ...interface{})
+		LogError(msg string, args ...interface{})
 	}
 
 	Ctx struct {
@@ -195,12 +205,12 @@ func (c *Ctx) Next() {
 
 		// 执行中间件/处理器
 		handler(c)
-		
+
 		// 检查是否在执行过程中被abort
 		if c.index >= abortIndex {
 			return
 		}
-		
+
 		c.index++
 	}
 }
@@ -211,6 +221,7 @@ func (c *Ctx) StatusCode() int {
 
 func (c *Ctx) Status(code int) {
 	c.statusCode = code
+	// 实际写入状态码到响应头
 	c.writer.WriteHeader(code)
 }
 
@@ -233,9 +244,14 @@ func (c *Ctx) String(code int, format string, values ...interface{}) {
 }
 
 func (c *Ctx) JSON(code int, obj interface{}) {
+	// 确保Content-Type设置为application/json
 	c.SetHeader("Content-Type", "application/json")
-	c.Status(code)
-	
+
+	// 设置状态码（如果需要）
+	if c.statusCode != code {
+		c.Status(code)
+	}
+
 	// 使用统一的JSON响应写入方法
 	if err := writeJSONResponse(c.writer, obj); err != nil {
 		WriteError(c, 500, NewAppError(ErrInternalServer, "Failed to encode JSON response"))
@@ -307,7 +323,7 @@ func (c *Ctx) Get(key string) (value interface{}, exists bool) {
 	return
 }
 
-//  Body (raw) Writers
+// Body (raw) Writers
 func (ctx *Ctx) Write(rawBody []byte) (int, error) {
 	return ctx.writer.Write(rawBody)
 }
@@ -642,4 +658,55 @@ func (ctx *Ctx) GetViewData() map[string]interface{} {
 
 	// if no values found, then return nil
 	return nil
+}
+
+// App 返回应用实例
+func (c *Ctx) App() *App {
+	return c.app
+}
+
+// Logger 返回应用日志器
+func (c *Ctx) Logger() *RockLogger {
+	if c.app != nil {
+		return c.app.logger
+	}
+	return nil
+}
+
+// LogDebug 记录调试日志
+func (c *Ctx) LogDebug(msg string, args ...interface{}) {
+	if logger := c.Logger(); logger != nil {
+		logger.Debugf(msg, args...)
+	}
+}
+
+// LogInfo 记录信息日志
+func (c *Ctx) LogInfo(msg string, args ...interface{}) {
+	if logger := c.Logger(); logger != nil {
+		logger.Infof(msg, args...)
+	}
+}
+
+// LogWarn 记录警告日志
+func (c *Ctx) LogWarn(msg string, args ...interface{}) {
+	if logger := c.Logger(); logger != nil {
+		logger.Warnf(msg, args...)
+	}
+}
+
+// LogError 记录错误日志
+func (c *Ctx) LogError(msg string, args ...interface{}) {
+	if logger := c.Logger(); logger != nil {
+		logger.Errorf(msg, args...)
+	}
+}
+
+// GetMethod 返回请求方法
+func (c *Ctx) GetMethod() string {
+	return c.Method
+}
+
+// GetPath 返回请求路径
+func (c *Ctx) GetPath() string {
+	return c.Path
 }

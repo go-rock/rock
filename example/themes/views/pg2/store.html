@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Store 键值存储系统演示</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 15px;
+        }
+        .demo-section {
+            margin: 30px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            background: #f9f9f9;
+        }
+        .demo-section h3 {
+            color: #555;
+            margin-top: 0;
+        }
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            margin: 10px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn:hover {
+            background: #5a6fd8;
+            transform: translateY(-2px);
+        }
+        .btn-success {
+            background: #28a745;
+        }
+        .btn-warning {
+            background: #ffc107;
+            color: #333;
+        }
+        .btn-danger {
+            background: #dc3545;
+        }
+        .result {
+            margin: 15px 0;
+            padding: 15px;
+            background: #e9ecef;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+        .feature-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .feature-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            border-left: 4px solid #667eea;
+        }
+        .feature-card h4 {
+            margin-top: 0;
+            color: #333;
+        }
+        .nav-links {
+            text-align: center;
+            margin: 30px 0;
+        }
+        .highlight {
+            background: linear-gradient(120deg, #a8edea 0%, #fed6e3 100%);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Rock Framework - Store 键值存储系统</h1>
+        
+        <div class="feature-list">
+            <div class="feature-card">
+                <h4>🔒 线程安全</h4>
+                <p>使用 <span class="highlight">sync.RWMutex</span> 保证并发访问安全</p>
+            </div>
+            <div class="feature-card">
+                <h4>⚡ 索引优化</h4>
+                <p>内置 <span class="highlight">map索引</span> 提高查找性能</p>
+            </div>
+            <div class="feature-card">
+                <h4>🛡️ 不可变数据</h4>
+                <p>支持 <span class="highlight">不可变存储</span> 防止数据意外修改</p>
+            </div>
+            <div class="feature-card">
+                <h4>🔄 默认值</h4>
+                <p><span class="highlight">GetDefault</span> 方法优雅处理key不存在情况</p>
+            </div>
+        </div>
+
+        <div class="nav-links">
+            <a href="/store/demo" class="btn btn-success">基本功能演示</a>
+            <a href="/store/immutable" class="btn btn-warning">不可变数据演示</a>
+            <a href="/store/default" class="btn btn-danger">默认值演示</a>
+            <a href="/store/concurrent" class="btn btn-success">并发访问演示</a>
+        </div>
+
+        <div class="demo-section">
+            <h3>🎮 交互式演示</h3>
+            <p>选择上方按钮体验不同功能，或尝试手动设置键值：</p>
+            
+            <div style="margin: 20px 0;">
+                <input type="text" id="keyInput" placeholder="输入key" style="padding: 10px; margin: 5px; border-radius: 5px; border: 1px solid #ddd;">
+                <input type="text" id="valueInput" placeholder="输入value" style="padding: 10px; margin: 5px; border-radius: 5px; border: 1px solid #ddd;">
+                <br>
+                <label>
+                    <input type="checkbox" id="immutableCheck"> 不可变
+                </label>
+                <br>
+                <button onclick="setValue()" class="btn">设置值</button>
+                <button onclick="getValue()" class="btn">获取值</button>
+            </div>
+            
+            <div id="interactiveResult" class="result" style="display:none;"></div>
+        </div>
+
+        <div class="demo-section">
+            <h3>📊 API 使用示例</h3>
+            <div class="result">// 创建Store实例
+store := rock.NewStore()
+
+// 基本设置和获取
+store.Set("key", "value")
+value := store.Get("key") // "value"
+
+// 设置不可变数据
+store.Save("config", configData, true)
+
+// 使用默认值
+result := store.GetDefault("missing_key", "default_value")
+
+// 获取条目信息
+entry, exists := store.GetEntry("key")
+if exists {
+    fmt.Printf("Key: %s, Value: %v, Immutable: %t\n", 
+        entry.Key, entry.Value(), entry.immutable)
+}</div>
+        </div>
+
+        <div class="demo-section">
+            <h3>🔗 相关链接</h3>
+            <div class="nav-links">
+                <a href="/" class="btn">返回首页</a>
+                <a href="/upload" class="btn">文件上传</a>
+                <a href="/admin/login" class="btn">管理员登录</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function setValue() {
+            const key = document.getElementById('keyInput').value;
+            const value = document.getElementById('valueInput').value;
+            const immutable = document.getElementById('immutableCheck').checked;
+
+            if (!key) {
+                showResult('❌ 请输入key');
+                return;
+            }
+
+            try {
+                const response = await fetch('/store/set', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        key: key,
+                        value: value,
+                        immutable: immutable
+                    })
+                });
+
+                const result = await response.json();
+                showResult(JSON.stringify(result, null, 2));
+            } catch (error) {
+                showResult('❌ 设置失败: ' + error.message);
+            }
+        }
+
+        async function getValue() {
+            const key = document.getElementById('keyInput').value;
+
+            if (!key) {
+                showResult('❌ 请输入key');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/store/get/${encodeURIComponent(key)}`);
+                const result = await response.json();
+                showResult(JSON.stringify(result, null, 2));
+            } catch (error) {
+                showResult('❌ 获取失败: ' + error.message);
+            }
+        }
+
+        function showResult(content) {
+            const resultDiv = document.getElementById('interactiveResult');
+            resultDiv.textContent = content;
+            resultDiv.style.display = 'block';
+        }
+    </script>
+</body>
+</html>

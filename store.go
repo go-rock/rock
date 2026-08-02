@@ -14,7 +14,7 @@ type (
 		ValueRaw  interface{} `json:"value" msgpack:"value" yaml:"Value" toml:"Value"`
 		immutable bool        // if true then it can't change by its caller.
 	}
-	
+
 	// Store 保持与现有代码的兼容性，但添加性能优化
 	Store struct {
 		entries []Entry
@@ -49,7 +49,7 @@ func (r *Store) Save(key string, value interface{}, immutable bool) (Entry, bool
 	r.init()
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	// 检查key是否已存在
 	if idx, exists := r.index[key]; exists {
 		// 更新现有条目
@@ -60,7 +60,7 @@ func (r *Store) Save(key string, value interface{}, immutable bool) (Entry, bool
 		}
 		return r.entries[idx], true
 	}
-	
+
 	// 添加新条目
 	kv := Entry{
 		Key:       key,
@@ -86,7 +86,7 @@ func (r *Store) GetDefault(key string, def interface{}) interface{} {
 	r.init()
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	
+
 	v, ok := r.GetEntry(key)
 	if !ok || v.ValueRaw == nil {
 		return def
@@ -131,11 +131,11 @@ var emptyEntry Entry
 // if nothing found then it returns an empty Entry and false.
 func (r *Store) GetEntry(key string) (Entry, bool) {
 	r.init()
-	
+
 	// 使用索引快速查找
 	if idx, exists := r.index[key]; exists && idx < len(r.entries) {
 		return r.entries[idx], true
 	}
-	
+
 	return emptyEntry, false
 }

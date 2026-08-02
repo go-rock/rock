@@ -32,9 +32,15 @@ func Recovery() HandlerFunc {
 		defer func() {
 			if err := recover(); err != nil {
 				message := fmt.Sprintf("%s", err)
+				traceMsg := trace(message)
+
 				// 记录错误日志
-				fmt.Printf("%s\n\n", trace(message))
-				
+				if app := c.App(); app != nil && app.logger != nil {
+					app.logger.Errorf("%s", traceMsg)
+				} else {
+					fmt.Printf("%s\n\n", traceMsg)
+				}
+
 				// 使用统一的错误处理
 				HandlePanic(c, message)
 			}

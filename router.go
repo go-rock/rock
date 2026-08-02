@@ -42,8 +42,15 @@ func (r *Router) Handle(method, pattern string, handler HandlerFunc) error {
 	return nil
 }
 
-// func(r *Router) handle(c htt)
 // ServeHTTP implemented http.Handler interface
+// func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+// 	// 创建一个简单的Context用于测试
+// 	c := &Ctx{}
+// 	c.newContext(w, req)
+// 	r.handle(c)
+// }
+
+// func(r *Router) handle(c htt)
 func (r *Router) handle(c *Ctx) {
 	var handler HandlerFunc
 	req := c.Request()
@@ -52,30 +59,33 @@ func (r *Router) handle(c *Ctx) {
 	method := req.Method
 	res := r.trie.Match(path)
 
-	if res.Node == nil {
-		// FixedPathRedirect or TrailingSlashRedirect
-		if res.TSR != "" || res.FPR != "" {
-			req.URL.Path = res.TSR
-			if res.FPR != "" {
-				req.URL.Path = res.FPR
-			}
-			code := 301
-			if method != "GET" {
-				code = 307
-			}
-			http.Redirect(w, req, req.URL.String(), code)
-			return
+	// FixedPathRedirect or TrailingSlashRedirect
+	if res.TSR != "" || res.FPR != "" {
+		req.URL.Path = res.TSR
+		if res.FPR != "" {
+			req.URL.Path = res.FPR
 		}
+		code := 301
+		if method != "GET" {
+			code = 307
+		}
+		http.Redirect(w, req, req.URL.String(), code)
+		return
+	}
+
+	if res.Node == nil {
 		if r.noRoute == nil {
 			// 使用统一的错误处理
-			WriteError(c, 501, NewAppError(ErrInternalServer, "Route Not Implemented"))
+			WriteError(c, 404, NewAppError(ErrNotFound, "Route Not Found"))
 			return
 		}
 		handler = r.noRoute
 	} else {
 		// ok := false
 		hd := res.Node.GetHandler(method)
-		if hf, ok := hd.(HandlerFunc); ok {
+		if hd == nil {
+			handler = nil
+		} else if hf, ok := hd.(HandlerFunc); ok {
 			handler = hf
 		} else {
 			// 尝试包装其他类型的处理器
