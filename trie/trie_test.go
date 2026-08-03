@@ -287,6 +287,18 @@ func TestDefinePanicsInvalidParamName(t *testing.T) {
 	assertPanics(t, func() { tr.Define("/a/:bad.name") })
 }
 
+func TestDefinePanicsEmptyColon(t *testing.T) {
+	tr := New()
+	// ":" 单独出现时参数名为空，不应 index-out-of-range，而是干净地 panic
+	assertPanics(t, func() { tr.Define("/:") })
+}
+
+func TestDefinePanicsEmptySuffixName(t *testing.T) {
+	tr := New()
+	// ":+json"：后缀把参数名剥空，同样应干净 panic
+	assertPanics(t, func() { tr.Define("/a/:+json") })
+}
+
 // --- 辅助 ---
 
 func assertPanics(t *testing.T, f func()) {

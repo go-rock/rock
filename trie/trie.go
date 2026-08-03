@@ -389,6 +389,10 @@ func parseNode(parent *Node, segment string, ignoreCase bool) *Node {
 
 	case segment[0] == ':':
 		name := segment[1:]
+		if name == "" {
+			// 形如 ":" 的非法模式，避免下方 name[len(name)-1] 越界
+			panic(fmt.Errorf(`invalid pattern: "%s"`, node.getSegments()))
+		}
 
 		switch name[len(name)-1] {
 		case '*':
@@ -405,6 +409,10 @@ func parseNode(parent *Node, segment string, ignoreCase bool) *Node {
 				}
 			}
 
+			if name == "" {
+				// 形如 ":+json"（参数名被后缀剥空）的非法模式
+				panic(fmt.Errorf(`invalid pattern: "%s"`, node.getSegments()))
+			}
 			if name[len(name)-1] == ')' {
 				if index := strings.IndexRune(name, '('); index > 0 {
 					var regex = name[index+1 : len(name)-1]
