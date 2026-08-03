@@ -16,6 +16,9 @@ import (
 	"github.com/go-rock/rock/binding"
 )
 
+// defaultMaxMemory 是请求体解码的默认上限（10MB）。
+const defaultMaxMemory = 10 << 20
+
 type (
 	// Context 封装单个 HTTP 请求的请求/响应能力，
 	// 由框架注入到每个处理函数与中间件中。
@@ -65,6 +68,8 @@ type (
 		// binding
 		Decode(v interface{}, args ...interface{}) (err error)
 		ShouldBind(v interface{}, args ...interface{}) (err error)
+		ShouldBindJSON(v interface{}) error
+		ShouldBindQuery(v interface{}) error
 
 		// Methods
 		Abort()
@@ -72,6 +77,7 @@ type (
 		Redirect(url string)
 		Attachment(r io.Reader, filename string) (err error)
 		Inline(r io.Reader, filename string) (err error)
+		File(filepath string)
 
 		// Post body
 
@@ -407,8 +413,8 @@ func (c *Ctx) ParseMultipartForm(maxMemory int64) error {
 // Example if header was "application/json" would decode using
 // json.NewDecoder(io.LimitReader(c.request.Body, maxMemory)).Decode(v).
 func (c *Ctx) Decode(v interface{}, args ...interface{}) (err error) {
-	// 默认 10MB，避免 >10KB 的 JSON/XML body 被截断导致绑定失败
-	var maxMemory int64 = 10 << 20
+	// 默认 10MB，避免过小的 body 上限导致绑定失败
+	var maxMemory int64 = defaultMaxMemory
 	var includeFormQueryParams bool = false
 	if len(args) > 0 {
 		result, ok := args[0].(bool)
@@ -485,6 +491,26 @@ func (c *Ctx) ShouldBind(v interface{}, args ...interface{}) (err error) {
 	}
 	err = binding.Validate(v)
 	return err
+}
+
+// ShouldBindJSON 强制按 JSON 绑定请求体并校验，不依赖 Content-Type。
+func (c *Ctx) ShouldBindJSON(v interface{}) error {
+	err := c.decodeBody(func(b []byte) error {
+		return json.NewDecoder(bytes.NewReader(b)).Decode(v)
+	}, defaultMaxMemory)
+	if err != nil {
+		return err
+	}
+	return binding.Validate(v)
+}
+
+// ShouldBindQuery 将 URL 查询参数绑定到结构体并校验。
+func (c *Ctx) ShouldBindQuery(v interface{}) error {
+	initFormDecoder()
+	if err := formDecoder.Decode(v, c.request.URL.Query()); err != nil {
+		return err
+	}
+	return binding.Validate(v)
 }
 
 // Redirect to
@@ -568,6 +594,12 @@ func (c *Ctx) Inline(r io.Reader, filename string) (err error) {
 	_, err = io.Copy(c.writer, r)
 
 	return
+}
+
+// File 直接返回磁盘上的单个文件，
+// 由 http.ServeFile 处理 Content-Type、Range 请求与 404。
+func (c *Ctx) File(filepath string) {
+	http.ServeFile(c.Writer(), c.Request(), filepath)
 }
 
 // form params

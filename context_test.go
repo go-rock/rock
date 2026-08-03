@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -769,6 +771,106 @@ func TestContextDataMethods(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != 200 {
 		t.Errorf("应 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestShouldBindJSON(t *testing.T) {
+	app := New()
+	app.Post("/json", func(c Context) {
+		var req struct {
+			Name string `binding:"required"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(400, M{"e": err.Error()})
+			return
+		}
+		c.JSON(200, M{"name": req.Name})
+	})
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	// 故意设置非 JSON 的 Content-Type，ShouldBindJSON 仍应按 JSON 绑定
+	resp, err := server.Client().Post(server.URL+"/json", "text/plain", strings.NewReader(`{"name":"rock"}`))
+	if err != nil {
+		t.Fatalf("Failed: %v", err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != 200 || !strings.Contains(string(body), `"name":"rock"`) {
+		t.Errorf("ShouldBindJSON 应强制 JSON 绑定, got %d %s", resp.StatusCode, body)
+	}
+
+	// 校验失败（name 必填）
+	resp2, err := server.Client().Post(server.URL+"/json", "text/plain", strings.NewReader(`{}`))
+	if err != nil {
+		t.Fatalf("Failed: %v", err)
+	}
+	body2, _ := io.ReadAll(resp2.Body)
+	resp2.Body.Close()
+	if resp2.StatusCode != 400 {
+		t.Errorf("校验失败应 400, got %d %s", resp2.StatusCode, body2)
+	}
+}
+
+func TestShouldBindQuery(t *testing.T) {
+	app := New()
+	app.Get("/q", func(c Context) {
+		var req struct {
+			Page  int    `form:"page"`
+			Query string `form:"q"`
+		}
+		if err := c.ShouldBindQuery(&req); err != nil {
+			c.JSON(400, M{"e": err.Error()})
+			return
+		}
+		c.JSON(200, M{"page": req.Page, "q": req.Query})
+	})
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	resp, err := server.Client().Get(server.URL + "/q?page=3&q=hello")
+	if err != nil {
+		t.Fatalf("Failed: %v", err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != 200 || !strings.Contains(string(body), `"page":3`) || !strings.Contains(string(body), `"q":"hello"`) {
+		t.Errorf("ShouldBindQuery 绑定失败, got %d %s", resp.StatusCode, body)
+	}
+}
+
+func TestContextFile(t *testing.T) {
+	dir := t.TempDir()
+	fp := filepath.Join(dir, "hello.txt")
+	os.WriteFile(fp, []byte("file-content"), 0644)
+
+	app := New()
+	app.Get("/file", func(c Context) { c.File(fp) })
+	app.Get("/missing", func(c Context) { c.File(filepath.Join(dir, "nope.txt")) })
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	resp, err := server.Client().Get(server.URL + "/file")
+	if err != nil {
+		t.Fatalf("Failed: %v", err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != 200 || string(body) != "file-content" {
+		t.Errorf("c.File 应返回文件内容, got %d %q", resp.StatusCode, body)
+	}
+
+	// 不存在的文件 → 404
+	resp2, err := server.Client().Get(server.URL + "/missing")
+	if err != nil {
+		t.Fatalf("Failed: %v", err)
+	}
+	resp2.Body.Close()
+	if resp2.StatusCode != 404 {
+		t.Errorf("c.File 不存在的文件应 404, got %d", resp2.StatusCode)
 	}
 }
 
