@@ -15,7 +15,7 @@ import (
 func main() {
 	app := rock.New()
 	app.Use(rock.Recovery())
-			app.SetLogLevel(rock.LevelDebug)
+	app.SetLogLevel(rock.LevelDebug)
 
 	// app.Use(Logger())
 	app.NoRoute(func(c rock.Context) {
@@ -71,12 +71,12 @@ func main() {
 	// 文件上传测试路由
 	app.Get("/upload", UploadForm)
 	app.Post("/upload", UploadHandler)
-	
+
 	// 多文件上传测试
 	app.Get("/upload/multiple", MultipleUploadForm)
 	app.Post("/upload/multiple", MultipleUploadHandler)
 
-// Store键值存储系统路由
+	// Store键值存储系统路由
 	app.Get("/store/demo", StoreDemo)
 	app.Get("/store/get/:key", StoreGetHandler)
 	app.Post("/store/set", StoreSetHandler)
@@ -268,10 +268,10 @@ func MultipleUploadHandler(c rock.Context) {
 
 	// 返回成功结果
 	c.JSON(200, rock.H{
-		"success":       true,
-		"message":       fmt.Sprintf("成功上传 %d 个文件", len(files)),
+		"success":        true,
+		"message":        fmt.Sprintf("成功上传 %d 个文件", len(files)),
 		"uploaded_count": len(files),
-		"files":         fileData,
+		"files":          fileData,
 	})
 }
 
@@ -289,8 +289,8 @@ func StoreDemo(c rock.Context) {
 	store.Set("bool_value", true)
 	store.Set("slice_value", []string{"apple", "banana", "cherry"})
 	store.Set("map_value", rock.M{
-		"name":    "Rock",
-		"version": "1.0",
+		"name":     "Rock",
+		"version":  "1.0",
 		"features": []string{"fast", "simple", "powerful"},
 	})
 
@@ -301,7 +301,7 @@ func StoreDemo(c rock.Context) {
 func StoreGetHandler(c rock.Context) {
 	key := fmt.Sprintf("%v", c.Param("key"))
 	value := store.Get(key)
-	
+
 	if value == nil {
 		c.JSON(404, rock.H{
 			"success": false,
@@ -323,9 +323,9 @@ func StoreGetHandler(c rock.Context) {
 func StoreSetHandler(c rock.Context) {
 	// 获取JSON数据
 	var data struct {
-		Key   string      `json:"key"`
-		Value interface{} `json:"value"`
-		Immutable bool    `json:"immutable"`
+		Key       string      `json:"key"`
+		Value     interface{} `json:"value"`
+		Immutable bool        `json:"immutable"`
 	}
 
 	// 使用ShouldBind方法进行JSON绑定
@@ -349,19 +349,19 @@ func StoreSetHandler(c rock.Context) {
 	if data.Immutable {
 		store.Save(data.Key, data.Value, true)
 		c.JSON(200, rock.H{
-			"success":  true,
-			"message":  fmt.Sprintf("Immutable value saved for key '%s'", data.Key),
-			"key":      data.Key,
-			"value":    data.Value,
+			"success":   true,
+			"message":   fmt.Sprintf("Immutable value saved for key '%s'", data.Key),
+			"key":       data.Key,
+			"value":     data.Value,
 			"immutable": true,
 		})
 	} else {
 		store.Set(data.Key, data.Value)
 		c.JSON(200, rock.H{
-			"success":  true,
-			"message":  fmt.Sprintf("Value saved for key '%s'", data.Key),
-			"key":      data.Key,
-			"value":    data.Value,
+			"success":   true,
+			"message":   fmt.Sprintf("Value saved for key '%s'", data.Key),
+			"key":       data.Key,
+			"value":     data.Value,
 			"immutable": false,
 		})
 	}
@@ -394,12 +394,12 @@ func StoreImmutableDemo(c rock.Context) {
 	storedMap := store.Get("immutable_map")
 
 	result := rock.M{
-		"message": "不可变数据演示",
+		"message":        "不可变数据演示",
 		"original_slice": originalSlice,
-		"stored_slice":  storedSlice,
-		"original_map":  originalMap,
-		"stored_map":    storedMap,
-		"explanation":   "不可变数据在Store中保持原始值，不会受到外部修改影响",
+		"stored_slice":   storedSlice,
+		"original_map":   originalMap,
+		"stored_map":     storedMap,
+		"explanation":    "不可变数据在Store中保持原始值，不会受到外部修改影响",
 	}
 
 	c.JSON(200, result)
@@ -477,10 +477,10 @@ func LoggerLevelsDemo(c rock.Context) {
 	logger.SetLevel(rock.LevelInfo)
 
 	c.JSON(200, rock.M{
-		"success": true,
-		"message": "日志级别演示完成",
+		"success":       true,
+		"message":       "日志级别演示完成",
 		"current_level": currentLevel.String(),
-		"explanation": "日志级别从详细到严重：Debug < Info < Warn < Error < Fatal",
+		"explanation":   "日志级别从详细到严重：Debug < Info < Warn < Error < Fatal",
 	})
 }
 
@@ -523,11 +523,11 @@ func LoggerRequestDemo(c rock.Context) {
 	// 注意：框架会自动记录请求日志，无需手动调用
 
 	c.JSON(200, rock.M{
-		"success": true,
-		"message": "请求日志演示完成",
-		"method": c.Request().Method,
-		"path": c.Request().URL.Path,
-		"status_code": statusCode,
+		"success":         true,
+		"message":         "请求日志演示完成",
+		"method":          c.Request().Method,
+		"path":            c.Request().URL.Path,
+		"status_code":     statusCode,
 		"processing_time": processingTime.String(),
 	})
 }
@@ -574,8 +574,8 @@ func LoggerContextDemo(c rock.Context) {
 	c.LogInfo("Context日志演示完成 - 所有步骤已记录")
 
 	c.JSON(200, rock.M{
-		"success": true,
-		"message": "Context日志演示完成",
+		"success":     true,
+		"message":     "Context日志演示完成",
 		"steps_count": len(steps),
 		"explanation": "Context日志方法可以直接在请求上下文中使用",
 	})
@@ -645,12 +645,12 @@ func LoggerConfigDemo(c rock.Context) {
 	logger.EnableRequestLog(true)
 
 	c.JSON(200, rock.M{
-		"success": true,
-		"message": "日志配置演示完成",
-		"original_level": currentLevel.String(),
+		"success":               true,
+		"message":               "日志配置演示完成",
+		"original_level":        currentLevel.String(),
 		"buffer_content_length": len(bufferContent),
-		"configured_levels": levelNames,
-		"explanation": "演示了日志器的各种配置选项",
+		"configured_levels":     levelNames,
+		"explanation":           "演示了日志器的各种配置选项",
 	})
 }
 
@@ -677,20 +677,20 @@ func StoreDefaultDemo(c rock.Context) {
 // StoreConcurrentDemo 并发访问演示
 func StoreConcurrentDemo(c rock.Context) {
 	done := make(chan bool, 10)
-	
+
 	// 启动多个goroutine同时访问Store
 	for i := 0; i < 10; i++ {
 		go func(id int) {
 			defer func() { done <- true }()
-			
+
 			// 每个goroutine设置和读取不同的key
 			key := fmt.Sprintf("concurrent_key_%d", id)
 			value := fmt.Sprintf("value_from_goroutine_%d", id)
-			
+
 			store.Set(key, value)
 			retrieved := store.Get(key)
-			
-			log.Printf("Goroutine %d: Set '%s' = '%s', Retrieved = '%s'", 
+
+			log.Printf("Goroutine %d: Set '%s' = '%s', Retrieved = '%s'",
 				id, key, value, retrieved)
 		}(i)
 	}
@@ -711,9 +711,9 @@ func StoreConcurrentDemo(c rock.Context) {
 	}
 
 	result := rock.M{
-		"message": "并发访问演示完成",
-		"data":    concurrentData,
-		"total_keys": len(concurrentData),
+		"message":     "并发访问演示完成",
+		"data":        concurrentData,
+		"total_keys":  len(concurrentData),
 		"explanation": "Store支持并发读写，使用RWMutex保证线程安全",
 	}
 
