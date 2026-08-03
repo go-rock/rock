@@ -116,7 +116,12 @@ func main() {
 		c.JSON(200, rock.M{"message": "Error日志已记录", "level": "ERROR"})
 	})
 
-	err := app.Run()
+	// 监听端口读 config.json 的 "port"，缺省回退 :8989
+	port := config.Config.GetString("port")
+	if port == "" {
+		port = ":8989"
+	}
+	err := app.Run(port)
 	if err != nil {
 		panic(err)
 	}
