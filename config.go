@@ -1,5 +1,6 @@
 package rock
 
+// Configuration 保存框架的可配置项（视图上下文键、代理信任开关等）。
 type Configuration struct {
 	// Defaults to "rock.view.engine".
 	ViewEngineContextKey string `ini:"view_engine_context_key" json:"viewEngineContextKey,omitempty" yaml:"ViewEngineContextKey" toml:"ViewEngineContextKey"`

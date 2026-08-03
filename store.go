@@ -6,9 +6,13 @@ import (
 )
 
 type (
+	// ValueSetter 表示可以写入键值条的接口。
 	ValueSetter interface {
 		Set(key string, newValue interface{}) (Entry, bool)
 	}
+
+	// Entry 是 Store 中的一条键值记录。
+	// immutable 为 true 时，读取会返回值的深拷贝，外部修改不影响存储。
 	Entry struct {
 		Key       string      `json:"key" msgpack:"key" yaml:"Key" toml:"Value"`
 		ValueRaw  interface{} `json:"value" msgpack:"value" yaml:"Value" toml:"Value"`
@@ -45,6 +49,7 @@ func (r *Store) Set(key string, value interface{}) (Entry, bool) {
 	return r.Save(key, value, false)
 }
 
+// Save 保存键值条目；immutable 为 true 时读取返回深拷贝。
 func (r *Store) Save(key string, value interface{}, immutable bool) (Entry, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -97,8 +102,7 @@ func (r *Store) GetDefault(key string, def interface{}) interface{} {
 	return vv
 }
 
-// Value returns the value of the entry,
-// respects the immutable.
+// Value 返回条目的值；对 immutable 条目返回深拷贝。
 func (e Entry) Value() interface{} {
 	if e.ValueRaw == nil {
 		return nil

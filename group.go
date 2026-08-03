@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+// RouterGroup 用于组织路由：支持前缀、中间件、嵌套分组，
+// 以及 per-group 的 404/405 处理。
 type RouterGroup struct {
 	prefix      string
 	middlewares []HandlerFunc // support middleware
@@ -34,6 +36,7 @@ func (group *RouterGroup) RegisterView(viewEngine ViewEngine) {
 }
 func (group *RouterGroup) SetRender(render ViewEngine) {}
 
+// Group 创建并返回一个前缀为该分组前缀 + prefix 的子分组。
 func (group *RouterGroup) Group(prefix string) *RouterGroup {
 	app := group.app
 	newGroup := &RouterGroup{
@@ -62,30 +65,37 @@ func (group *RouterGroup) addRoute(method string, comp string, handler HandlerFu
 	group.app.router.Handle(method, pattern, handler)
 }
 
+// Get 注册一条 GET 路由。
 func (group *RouterGroup) Get(pattern string, handler HandlerFunc) {
 	group.addRoute(http.MethodGet, pattern, handler)
 }
 
+// Post 注册一条 POST 路由。
 func (group *RouterGroup) Post(pattern string, handler HandlerFunc) {
 	group.addRoute(http.MethodPost, pattern, handler)
 }
 
+// Put 注册一条 PUT 路由。
 func (group *RouterGroup) Put(pattern string, handler HandlerFunc) {
 	group.addRoute(http.MethodPut, pattern, handler)
 }
 
+// Patch 注册一条 PATCH 路由。
 func (group *RouterGroup) Patch(pattern string, handler HandlerFunc) {
 	group.addRoute(http.MethodPatch, pattern, handler)
 }
 
+// Delete 注册一条 DELETE 路由。
 func (group *RouterGroup) Delete(pattern string, handler HandlerFunc) {
 	group.addRoute(http.MethodDelete, pattern, handler)
 }
 
+// Options 注册一条 OPTIONS 路由。
 func (group *RouterGroup) Options(pattern string, handler HandlerFunc) {
 	group.addRoute(http.MethodOptions, pattern, handler)
 }
 
+// Use 为本分组添加中间件，作用于匹配该分组前缀的路径。
 func (group *RouterGroup) Use(middlewares ...HandlerFunc) {
 	group.middlewares = append(group.middlewares, middlewares...)
 }

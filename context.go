@@ -17,6 +17,8 @@ import (
 )
 
 type (
+	// Context 封装单个 HTTP 请求的请求/响应能力，
+	// 由框架注入到每个处理函数与中间件中。
 	Context interface {
 		Application() *App
 		ResetRequest(r *http.Request)
@@ -99,6 +101,7 @@ type (
 		LogError(msg string, args ...interface{})
 	}
 
+	// Ctx 是 Context 接口的默认实现，通过 sync.Pool 复用。
 	Ctx struct {
 		app     *App
 		request *http.Request

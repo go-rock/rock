@@ -20,6 +20,8 @@ var (
 	formDecoderInit sync.Once
 )
 
+// App 是 rock 框架的核心实例，实现了 http.Handler 接口。
+// 通过 New 创建，用于注册路由、中间件、视图引擎并启动服务。
 type App struct {
 	*RouterGroup
 	router *Router
@@ -34,6 +36,7 @@ type App struct {
 	logger *RockLogger
 }
 
+// GetView 返回视图引擎持有者（View）。
 func (app *App) GetView() View {
 	return app.view
 }

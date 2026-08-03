@@ -5,6 +5,8 @@ import (
 	"log"
 )
 
+// ViewEngine 是模板引擎需要实现的接口，
+// 由外部引擎（如 rock-pongo2）提供实现并通过 RegisterView 注册。
 type ViewEngine interface {
 	Name() string
 	Ext() string
@@ -13,10 +15,12 @@ type ViewEngine interface {
 	GetViewDir() string
 }
 
+// View 持有当前注册的模板引擎。
 type View struct {
 	Engine ViewEngine
 }
 
+// Engine 是 ViewEngine 的别名。
 type Engine = ViewEngine
 
 // Register registers a view engine.
@@ -55,6 +59,7 @@ func (v *View) ExecuteWriter(w io.Writer, filename string, bindingData interface
 	return v.Engine.ExecuteWriter(w, filename, bindingData)
 }
 
+// BlockEngine 是预留的空模板引擎类型。
 type BlockEngine struct{}
 
 // HTML Engine

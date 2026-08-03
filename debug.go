@@ -1,5 +1,6 @@
-// Codes from https://github.com/gin-gonic/gin/blob/master/debug.go
 package rock
+
+// 本文件的部分实现参考了 gin 的 debug.go。
 
 import (
 	"fmt"
@@ -10,9 +11,10 @@ import (
 	"strings"
 )
 
+// HandlersChain 是一组按顺序执行的处理器（中间件 + 路由处理器）。
 type HandlersChain []HandlerFunc
 
-// Last returns the last handler in the chain. ie. the last handler is the main one.
+// Last 返回链上的最后一个处理器，即主处理器。
 func (c HandlersChain) Last() HandlerFunc {
 	if length := len(c); length > 0 {
 		return c[length-1]
@@ -20,6 +22,7 @@ func (c HandlersChain) Last() HandlerFunc {
 	return nil
 }
 
+// DefaultWriter 是调试输出的默认写入目标。
 var DefaultWriter io.Writer = os.Stdout
 
 // debugEnabled 显式调试开关，默认关闭。
