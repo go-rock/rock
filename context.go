@@ -5,7 +5,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
-	"math"
 	"mime/multipart"
 	"net"
 	"net/http"
@@ -14,10 +13,6 @@ import (
 
 	"github.com/fatih/structs"
 	"github.com/go-rock/rock/binding"
-)
-
-const (
-	abortIndex = math.MaxInt8 / 2
 )
 
 type (
@@ -115,6 +110,7 @@ type (
 		// middleware
 		handlers []HandlerFunc
 		index    int
+		aborted  bool // Abort() 标志，终止中间件链（不依赖固定 index 哨兵，支持任意长链）
 		// render
 		// render HTMLRender
 		data   M
@@ -136,6 +132,7 @@ func (c *Ctx) ResetRequest(r *http.Request) {
 	c.statusCode = http.StatusOK
 	c.headerWritten = false
 	c.index = -1
+	c.aborted = false
 	c.formParsed = false
 	c.multipartFormParsed = false
 	// 重置状态数据以防止污染
@@ -169,6 +166,7 @@ func (c *Ctx) newContext(w http.ResponseWriter, r *http.Request) *Ctx {
 	c.statusCode = http.StatusOK
 	c.headerWritten = false
 	c.index = -1
+	c.aborted = false
 	c.formParsed = false
 	c.multipartFormParsed = false
 	// 重置状态数据以防止污染
@@ -189,8 +187,8 @@ func (c *Ctx) Writer() http.ResponseWriter {
 }
 
 func (c *Ctx) Next() {
-	// 安全检查：确保handlers不为空且index有效
-	if c.handlers == nil {
+	// 安全检查：确保handlers不为空且未被abort
+	if c.handlers == nil || c.aborted {
 		return
 	}
 
@@ -199,8 +197,8 @@ func (c *Ctx) Next() {
 
 	// 执行下一个中间件或处理器
 	for c.index < s {
-		// 检查是否已经被abort（index设置为abortIndex）
-		if c.index >= abortIndex {
+		// 检查是否已经被abort
+		if c.aborted {
 			return
 		}
 
@@ -214,7 +212,7 @@ func (c *Ctx) Next() {
 		handler(c)
 
 		// 检查是否在执行过程中被abort
-		if c.index >= abortIndex {
+		if c.aborted {
 			return
 		}
 
@@ -474,7 +472,7 @@ func (c *Ctx) Redirect(url string) {
 }
 
 func (c *Ctx) Abort() {
-	c.index = abortIndex
+	c.aborted = true
 }
 
 // AbortWithStatusJSON calls `Abort()` and then `JSON` internally.

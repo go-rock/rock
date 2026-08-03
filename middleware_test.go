@@ -527,6 +527,38 @@ func TestMiddlewareGroupPrefixSegmentMatch(t *testing.T) {
 	}
 }
 
+func TestNextLongChain(t *testing.T) {
+	app := New()
+
+	executed := 0
+	// 注册超过 63 个中间件（abortIndex 上限），验证任意长链都能完整执行
+	for i := 0; i < 70; i++ {
+		app.Use(func(c Context) {
+			executed++
+		})
+	}
+	app.Get("/long", func(c Context) {
+		executed++
+		c.String(200, "done")
+	})
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	resp, err := server.Client().Get(server.URL + "/long")
+	if err != nil {
+		t.Fatalf("Failed to GET /long: %v", err)
+	}
+	resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+	if executed != 71 {
+		t.Errorf("expected all 71 handlers to run, got %d", executed)
+	}
+}
+
 func TestMiddlewareRunsOnNoRoute(t *testing.T) {
 	app := New()
 	app.Use(func(c Context) {
