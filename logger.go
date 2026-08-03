@@ -83,9 +83,10 @@ func NewLogger() *RockLogger {
 	outputs := []io.Writer{os.Stdout}
 
 	rl := &RockLogger{
-		logger:  logger,
-		level:   LevelDebug, // 统一设置为DEBUG级别
-		outputs: outputs,
+		logger:     logger,
+		level:      LevelDebug, // 统一设置为DEBUG级别
+		outputs:    outputs,
+		requestLog: true, // 默认开启请求日志，ServeHTTP 会记录每次访问
 	}
 
 	return rl

@@ -527,6 +527,39 @@ func TestMiddlewareGroupPrefixSegmentMatch(t *testing.T) {
 	}
 }
 
+func TestMiddlewareGroupOrder(t *testing.T) {
+	app := New()
+
+	var order []string
+	app.Use(func(c Context) { order = append(order, "root"); c.Next() })
+
+	api := app.Group("/api")
+	api.Use(func(c Context) { order = append(order, "api"); c.Next() })
+
+	v1 := api.Group("/v1")
+	v1.Use(func(c Context) { order = append(order, "v1"); c.Next() })
+	v1.Get("/x", func(c Context) { order = append(order, "handler"); c.String(200, "ok") })
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	resp, err := server.Client().Get(server.URL + "/api/v1/x")
+	if err != nil {
+		t.Fatalf("Failed to GET /api/v1/x: %v", err)
+	}
+	resp.Body.Close()
+
+	expected := []string{"root", "api", "v1", "handler"}
+	if len(order) != len(expected) {
+		t.Fatalf("执行顺序应为 %v, got %v", expected, order)
+	}
+	for i := range expected {
+		if order[i] != expected[i] {
+			t.Fatalf("执行顺序应为 %v, got %v", expected, order)
+		}
+	}
+}
+
 func TestNextLongChain(t *testing.T) {
 	app := New()
 

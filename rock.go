@@ -4,7 +4,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"sort"
 	"sync"
 	"time"
 
@@ -127,42 +126,18 @@ func (app *App) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-// collectMiddlewares 收集并排序中间件
+// collectMiddlewares 收集匹配路径的所有中间件。
+// app.groups 已按 prefix 长度有序（见 RouterGroup.Group），
+// 因此直接按序拼接即可得到"外层分组先、内层分组后"的执行顺序，无需每请求排序。
 func (app *App) collectMiddlewares(path string) []HandlerFunc {
-	type middlewareWithPriority struct {
-		handler  HandlerFunc
-		priority int
-	}
+	var middlewares []HandlerFunc
 
-	var middlewareList []middlewareWithPriority
-
-	// 收集所有匹配的中间件
 	// 按路径段匹配：组前缀 "/admin" 只匹配 "/admin" 或 "/admin/..."，
 	// 避免把 "/admin" 组的中间件误套到 "/administrator" 这类同前缀路径上。
 	for _, group := range app.groups {
 		if len(group.middlewares) > 0 && groupMatchesPath(group.prefix, path) {
-			for i, handler := range group.middlewares {
-				// 简单的优先级策略：group的深度和中间件在组中的位置
-				priority := len(group.prefix)*100 + i
-				middlewareList = append(middlewareList, middlewareWithPriority{
-					handler:  handler,
-					priority: priority,
-				})
-			}
+			middlewares = append(middlewares, group.middlewares...)
 		}
-	}
-
-	// 按优先级排序（从低到高），用标准库稳定排序替代手写冒泡
-	if len(middlewareList) > 1 {
-		sort.SliceStable(middlewareList, func(i, j int) bool {
-			return middlewareList[i].priority < middlewareList[j].priority
-		})
-	}
-
-	// 提取排序后的处理器
-	middlewares := make([]HandlerFunc, len(middlewareList))
-	for i, mw := range middlewareList {
-		middlewares[i] = mw.handler
 	}
 
 	return middlewares

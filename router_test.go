@@ -169,6 +169,27 @@ func TestGroupNoRoute(t *testing.T) {
 	}
 }
 
+func TestHeadFallsBackToGet(t *testing.T) {
+	app := New()
+	app.Get("/test", func(c Context) {
+		c.String(200, "body")
+	})
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	req, _ := http.NewRequest(http.MethodHead, server.URL+"/test", nil)
+	resp, err := server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("HEAD failed: %v", err)
+	}
+	resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		t.Errorf("HEAD 应自动映射 GET 并返回 200, got %d", resp.StatusCode)
+	}
+}
+
 func TestRouterNoRoute(t *testing.T) {
 	app := New()
 

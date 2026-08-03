@@ -41,7 +41,18 @@ func (group *RouterGroup) Group(prefix string) *RouterGroup {
 		parent: group,
 		app:    app,
 	}
-	app.groups = append(app.groups, newGroup)
+	// 按 prefix 长度有序插入，保持 app.groups 始终按（前缀长度, 注册顺序）排列，
+	// 这样 collectMiddlewares 直接按序拼接即可，无需每请求排序
+	insertPos := len(app.groups)
+	for i, g := range app.groups {
+		if len(g.prefix) > len(newGroup.prefix) {
+			insertPos = i
+			break
+		}
+	}
+	app.groups = append(app.groups, nil)
+	copy(app.groups[insertPos+1:], app.groups[insertPos:])
+	app.groups[insertPos] = newGroup
 	return newGroup
 }
 

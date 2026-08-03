@@ -82,6 +82,10 @@ func (r *Router) handle(c *Ctx) {
 		}
 	} else {
 		hd := res.Node.GetHandler(method)
+		// HEAD 未注册时自动回退到 GET（响应体由 net/http 在服务端剥离）
+		if hd == nil && method == http.MethodHead {
+			hd = res.Node.GetHandler(http.MethodGet)
+		}
 		if hf, ok := hd.(HandlerFunc); ok {
 			handler = hf
 		} else if hd != nil {
