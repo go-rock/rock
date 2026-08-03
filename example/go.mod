@@ -7,7 +7,7 @@ replace github.com/go-rock/rock => ../
 require (
 	github.com/fsnotify/fsnotify v1.5.1
 	github.com/go-rock/rock v0.3.0
-	github.com/go-rock/rock-pongo2 v0.0.0-20260803062446-8223965e153e
+	github.com/go-rock/rock-pongo2 v0.1.0
 	github.com/spf13/viper v1.9.0
 )
 
