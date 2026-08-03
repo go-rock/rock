@@ -564,6 +564,74 @@ func TestContextMustMethods(t *testing.T) {
 	}
 }
 
+func TestContextPoolNoValueLeak(t *testing.T) {
+	app := New()
+
+	// 请求 A：往 ctx.Values() 写入数据（模拟中间件存用户ID/鉴权信息等）
+	reqA := httptest.NewRequest("GET", "/a", nil)
+	wA := httptest.NewRecorder()
+	cA := app.createContext(wA, reqA)
+	cA.Values().Set("user_id", "42")
+	cA.ViewData("title", "secret-page")
+
+	// 请求 A 结束，放回池
+	app.pool.Put(cA)
+
+	// 请求 B：复用同一个 pool 里的 Ctx（sync.Pool 会优先返回刚 Put 的对象）
+	reqB := httptest.NewRequest("GET", "/b", nil)
+	wB := httptest.NewRecorder()
+	cB := app.createContext(wB, reqB)
+
+	if got := cB.Values().Get("user_id"); got != nil {
+		t.Fatalf("values 跨请求泄漏! 请求B看到了请求A写入的 user_id=%v", got)
+	}
+	if got := cB.GetViewData(); got != nil {
+		t.Fatalf("ViewData 跨请求泄漏! 请求B看到了请求A的 view data=%v", got)
+	}
+}
+
+func TestContextStatusLazyWriteHeader(t *testing.T) {
+	app := New()
+
+	// 先设置状态码再改，最终以 JSON 的参数为准，且只写一次头
+	app.Get("/override", func(c Context) {
+		c.Status(http.StatusNotFound)
+		c.JSON(http.StatusOK, M{"ok": true})
+	})
+
+	// 先 Status 再裸写 body，应以 Status 设置的状态码发送
+	app.Get("/raw", func(c Context) {
+		c.Status(http.StatusCreated)
+		c.Write([]byte("created"))
+	})
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	resp, err := server.Client().Get(server.URL + "/override")
+	if err != nil {
+		t.Fatalf("Failed to GET /override: %v", err)
+	}
+	io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("JSON 的 code 参数应为最终状态码 200, got %d", resp.StatusCode)
+	}
+
+	resp2, err := server.Client().Get(server.URL + "/raw")
+	if err != nil {
+		t.Fatalf("Failed to GET /raw: %v", err)
+	}
+	body, _ := io.ReadAll(resp2.Body)
+	resp2.Body.Close()
+	if resp2.StatusCode != http.StatusCreated {
+		t.Errorf("Status+Write 应发送 201, got %d", resp2.StatusCode)
+	}
+	if string(body) != "created" {
+		t.Errorf("Expected body 'created', got %q", string(body))
+	}
+}
+
 func BenchmarkContext(b *testing.B) {
 	app := New()
 

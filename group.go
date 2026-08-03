@@ -117,11 +117,15 @@ func (group *RouterGroup) createStaticHandler(relativePath string, fs http.FileS
 		file, ok := c.Param("filepath").(string)
 		if !ok {
 			c.Status(http.StatusBadRequest)
+			// Status 为懒写入，此处直接发送响应头
+			c.Writer().WriteHeader(http.StatusBadRequest)
 			return
 		}
 		// Check if file exists and/or if we have permission to access it
 		if _, err := fs.Open(file); err != nil {
 			c.Status(http.StatusNotFound)
+			// Status 为懒写入，此处直接发送响应头
+			c.Writer().WriteHeader(http.StatusNotFound)
 			return
 		}
 		fileServer.ServeHTTP(c.Writer(), c.Request())

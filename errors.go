@@ -95,9 +95,8 @@ func WriteError(c Context, statusCode int, err error) {
 		}
 	}
 
-	c.Status(statusCode)
-
-	// 设置Content-Type
+	// 先设置响应头，再设置状态码并写入 body。
+	// 状态码为懒写入（见 Ctx.writeHeader），c.Write 会在首次写入时发送响应头。
 	c.SetHeader("Content-Type", "application/json")
 
 	// 写入错误响应
@@ -106,12 +105,17 @@ func WriteError(c Context, statusCode int, err error) {
 		Error:   httpErr,
 	}
 
-	if err := writeJSONResponse(c.Writer(), response); err != nil {
-		// 如果写入错误响应失败，至少写入文本错误
+	body, err := json.Marshal(response)
+	if err != nil {
+		// 如果序列化失败，至少写入文本错误
 		c.SetHeader("Content-Type", "text/plain")
 		c.Status(statusCode)
-		fmt.Fprintf(c.Writer(), "Error: %s", httpErr.Message)
+		c.Write([]byte(fmt.Sprintf("Error: %s", httpErr.Message)))
+		return
 	}
+
+	c.Status(statusCode)
+	c.Write(body)
 }
 
 // writeJSONResponse 统一的JSON响应写入方法

@@ -110,7 +110,8 @@ type (
 		Path   string
 		Method string
 		// response info
-		statusCode int
+		statusCode    int
+		headerWritten bool // 响应头是否已写入，避免重复调用 WriteHeader
 		// middleware
 		handlers []HandlerFunc
 		index    int
@@ -133,13 +134,17 @@ func (c *Ctx) ResetRequest(r *http.Request) {
 	c.Path = r.URL.Path
 	c.Method = r.Method
 	c.statusCode = http.StatusOK
+	c.headerWritten = false
 	c.index = -1
 	c.formParsed = false
 	c.multipartFormParsed = false
 	// 重置状态数据以防止污染
 	c.params = nil
 	c.data = nil
-	// 注意：values应该保留，因为它们可能在中间件间共享
+	// 每个请求都应使用全新的 Store，
+	// 否则对象池复用时会泄漏上个请求通过 Values/ViewData 写入的数据。
+	// 同一请求内的中间件通过共享的 c 访问 values，不需要跨请求保留。
+	c.values = Store{}
 }
 
 func (c *Ctx) GetView() View {
@@ -162,14 +167,16 @@ func (c *Ctx) newContext(w http.ResponseWriter, r *http.Request) *Ctx {
 	c.Path = r.URL.Path
 	c.Method = r.Method
 	c.statusCode = http.StatusOK
+	c.headerWritten = false
 	c.index = -1
 	c.formParsed = false
 	c.multipartFormParsed = false
 	// 重置状态数据以防止污染
 	c.params = nil
 	c.data = nil
-	// 初始化Store以确保向后兼容性
-	c.values.init()
+	// 为每个请求分配全新的 Store，
+	// 避免对象池复用时带上个请求通过 Values/ViewData 写入的数据。
+	c.values = Store{}
 	return c
 }
 
@@ -219,10 +226,21 @@ func (c *Ctx) StatusCode() int {
 	return c.statusCode
 }
 
+// Status 设置响应状态码，但不会立即写入响应头。
+// 状态码会在首次写入响应体时（见 writeHeader）才真正发送，
+// 因此允许在写出 body 之前多次修改状态码，也不会触发重复的 WriteHeader。
 func (c *Ctx) Status(code int) {
 	c.statusCode = code
-	// 实际写入状态码到响应头
-	c.writer.WriteHeader(code)
+}
+
+// writeHeader 在首次写入响应体前，把当前状态码写入响应头。
+// 每个请求只执行一次，避免重复调用 WriteHeader 产生的 "superfluous" 告警。
+func (c *Ctx) writeHeader() {
+	if c.headerWritten {
+		return
+	}
+	c.writer.WriteHeader(c.statusCode)
+	c.headerWritten = true
 }
 
 func (c *Ctx) Fail(code int, err string) {
@@ -247,10 +265,9 @@ func (c *Ctx) JSON(code int, obj interface{}) {
 	// 确保Content-Type设置为application/json
 	c.SetHeader("Content-Type", "application/json")
 
-	// 设置状态码（如果需要）
-	if c.statusCode != code {
-		c.Status(code)
-	}
+	// code 参数是响应状态码的最终来源，先写头再写 body
+	c.Status(code)
+	c.writeHeader()
 
 	// 使用统一的JSON响应写入方法
 	if err := writeJSONResponse(c.writer, obj); err != nil {
@@ -266,7 +283,8 @@ func (c *Ctx) XML(code int, i interface{}) (err error) {
 	}
 
 	c.writer.Header().Set(ContentType, ApplicationXMLCharsetUTF8)
-	c.writer.WriteHeader(code)
+	c.Status(code)
+	c.writeHeader()
 
 	if _, err = c.writer.Write([]byte(xml.Header)); err == nil {
 		_, err = c.writer.Write(b)
@@ -325,6 +343,7 @@ func (c *Ctx) Get(key string) (value interface{}, exists bool) {
 
 // Body (raw) Writers
 func (ctx *Ctx) Write(rawBody []byte) (int, error) {
+	ctx.writeHeader()
 	return ctx.writer.Write(rawBody)
 }
 
@@ -448,8 +467,9 @@ func (c *Ctx) ShouldBind(v interface{}, args ...interface{}) (err error) {
 // Redirect to
 func (c *Ctx) Redirect(url string) {
 	c.writer.Header().Set("Location", url)
-	c.writer.WriteHeader(http.StatusFound)
-	c.String(200, "Redirecting to: "+url)
+	c.SetHeader("Content-Type", "text/plain")
+	c.Status(http.StatusFound)
+	c.Write([]byte("Redirecting to: " + url))
 }
 
 func (c *Ctx) Abort() {
@@ -500,7 +520,8 @@ func (c *Ctx) ClientIP() (clientIP string) {
 func (c *Ctx) Attachment(r io.Reader, filename string) (err error) {
 	c.writer.Header().Set(ContentDisposition, "attachment;filename="+filename)
 	c.writer.Header().Set(ContentType, detectContentType(filename))
-	c.writer.WriteHeader(http.StatusOK)
+	c.Status(http.StatusOK)
+	c.writeHeader()
 
 	_, err = io.Copy(c.writer, r)
 
@@ -512,7 +533,8 @@ func (c *Ctx) Attachment(r io.Reader, filename string) (err error) {
 func (c *Ctx) Inline(r io.Reader, filename string) (err error) {
 	c.writer.Header().Set(ContentDisposition, "inline;filename="+filename)
 	c.writer.Header().Set(ContentType, detectContentType(filename))
-	c.writer.WriteHeader(http.StatusOK)
+	c.Status(http.StatusOK)
+	c.writeHeader()
 
 	_, err = io.Copy(c.writer, r)
 
