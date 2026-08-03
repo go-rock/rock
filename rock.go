@@ -1,10 +1,14 @@
 package rock
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net/http"
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/go-playground/form/v4"
@@ -85,18 +89,78 @@ func (app *App) createContext(w http.ResponseWriter, r *http.Request) *Ctx {
 	return c
 }
 
-// Run defines the method to start a http server
-func (app *App) Run(args ...string) (err error) {
+// serverOptions 服务器启动选项
+type serverOptions struct {
+	certFile string
+	keyFile  string
+}
+
+// shutdownTimeout 优雅关闭时等待在途请求完成的最长时间
+const shutdownTimeout = 5 * time.Second
+
+// Run 启动 HTTP 服务并阻塞，直到收到 SIGINT/SIGTERM 优雅退出。
+// args[0] 可选，为监听地址，默认 ":8989"。
+func (app *App) Run(args ...string) error {
 	addr := ":8989"
 	if len(args) > 0 {
 		addr = args[0]
 	}
-	if app.logger != nil {
-		app.logger.Infof("Rock running on http://localhost%s", addr)
-	} else {
-		debugPrint("Rock running on http://localhost%s", addr)
+	return app.serve(addr, serverOptions{})
+}
+
+// RunTLS 以 HTTPS 启动服务（certFile/keyFile 为 PEM 文件路径），
+// 同样支持 SIGINT/SIGTERM 优雅退出。
+func (app *App) RunTLS(addr, certFile, keyFile string) error {
+	return app.serve(addr, serverOptions{certFile: certFile, keyFile: keyFile})
+}
+
+// serve 启动 HTTP(S) 服务，处理优雅退出。
+func (app *App) serve(addr string, opts serverOptions) error {
+	scheme := "http"
+	if opts.certFile != "" {
+		scheme = "https"
 	}
-	return http.ListenAndServe(addr, app)
+	if app.logger != nil {
+		app.logger.Infof("Rock running on %s://localhost%s", scheme, addr)
+	} else {
+		debugPrint("Rock running on %s://localhost%s", scheme, addr)
+	}
+
+	srv := &http.Server{
+		Addr:    addr,
+		Handler: app,
+	}
+
+	// 监听退出信号做优雅关闭
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+
+	errCh := make(chan error, 1)
+	go func() {
+		var err error
+		if opts.certFile != "" {
+			err = srv.ListenAndServeTLS(opts.certFile, opts.keyFile)
+		} else {
+			err = srv.ListenAndServe()
+		}
+		if err != nil && err != http.ErrServerClosed {
+			errCh <- err
+		} else {
+			errCh <- nil
+		}
+	}()
+
+	select {
+	case err := <-errCh:
+		return err
+	case sig := <-quit:
+		if app.logger != nil {
+			app.logger.Infof("Received %s, shutting down...", sig)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
+		return srv.Shutdown(ctx)
+	}
 }
 
 func (app *App) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -152,6 +216,12 @@ func (app *App) ConfigurationReadOnly() *Configuration {
 // 仅当应用部署在可信反向代理之后时才应开启，默认关闭。
 func (app *App) SetTrustProxy(enabled bool) {
 	app.config.TrustProxyHeaders = enabled
+}
+
+// SetDebug 开启/关闭全局调试输出（路由表、debugPrint，以及 WriteError 的
+// 内部错误细节）。生产环境建议保持关闭。测试环境下始终为调试模式。
+func (app *App) SetDebug(enabled bool) {
+	SetDebug(enabled)
 }
 
 func (app *App) View(writer io.Writer, filename string, bindingData interface{}) error {
