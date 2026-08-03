@@ -17,7 +17,6 @@ func main() {
 	app.Use(rock.Recovery())
 	app.SetLogLevel(rock.LevelDebug)
 
-	// app.Use(Logger())
 	app.NoRoute(func(c rock.Context) {
 		// c.JSON(404, rock.M{"msg": "404 not found"})
 		c.Status(404)
@@ -170,25 +169,14 @@ func AdminLogin(c rock.Context) {
 func auth() rock.HandlerFunc {
 	return func(c rock.Context) {
 		log.Println("auth before")
-		// 模拟认证检查 - 实际应用中应该检查session、token等
-		isAuthenticated := false // 这里是模拟，实际应该根据具体逻辑判断
-		if !isAuthenticated {
-			c.JSON(401, rock.H{"msg": "require admin"})
+		// 演示用：?token=admin 视为已登录；实际应用应校验 session/token
+		if c.Query("token") != "admin" {
+			c.JSON(401, rock.H{"msg": "require admin, use ?token=admin"})
 			c.Abort()
+			return
 		}
 		c.Next()
 		log.Println("auth after")
-	}
-}
-
-func Logger() rock.HandlerFunc {
-	return func(c rock.Context) {
-		// Start timer
-		t := time.Now()
-		// Process request
-		c.Next()
-		// Calculate resolution time
-		log.Printf("[%d] %s %s in %v", c.StatusCode(), c.Request().Method, c.Request().RequestURI, time.Since(t))
 	}
 }
 
