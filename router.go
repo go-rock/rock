@@ -11,11 +11,7 @@ import (
 // Mux is a tire base HTTP request router which can be used to
 // dispatch requests to different handler functions.
 type Router struct {
-	trie      *trie.Trie
-	otherwise HandlerFunc
-	noRoute   HandlerFunc
-	noMethod  HandlerFunc
-	// prefix    string
+	trie *trie.Trie
 }
 
 // New returns a Mux instance.
@@ -76,13 +72,13 @@ func (r *Router) handle(c *Ctx) {
 			http.Redirect(w, req, redirectURL, code)
 		}
 	} else if res.Node == nil {
-		// 无匹配路由：默认 404 或自定义 noRoute
-		if r.noRoute == nil {
+		// 无匹配路由：按分组就近选择 404 处理函数
+		if h := r.resolveNoRoute(c, path); h != nil {
+			handler = h
+		} else {
 			handler = func(ctx Context) {
 				WriteError(ctx, 404, NewAppError(ErrNotFound, "Route Not Found"))
 			}
-		} else {
-			handler = r.noRoute
 		}
 	} else {
 		hd := res.Node.GetHandler(method)
@@ -108,12 +104,12 @@ func (r *Router) handle(c *Ctx) {
 					ctx.Status(http.StatusNoContent)
 					ctx.Write(nil)
 				}
-			} else if r.noMethod == nil {
+			} else if noMethod := r.resolveNoMethod(c, path); noMethod != nil {
+				handler = noMethod
+			} else {
 				handler = func(ctx Context) {
 					WriteError(ctx, 405, NewAppError(ErrMethodNotAllow, fmt.Sprintf(`Method "%s" not allowed in "%s"`, method, path)))
 				}
-			} else {
-				handler = r.noMethod
 			}
 		}
 	}
@@ -123,4 +119,35 @@ func (r *Router) handle(c *Ctx) {
 	}
 	c.handlers = append(c.handlers, handler)
 	c.Next()
+}
+
+// resolveNoRoute 找出对 path 最具体且注册了 NoRoute 的分组。
+// 未找到时回退到根分组（app.NoRoute），再返回 nil 由调用方使用默认 404。
+func (r *Router) resolveNoRoute(c *Ctx, path string) HandlerFunc {
+	return r.resolveNotFound(c, path, func(g *RouterGroup) HandlerFunc { return g.noRoute })
+}
+
+// resolveNoMethod 同 resolveNoRoute，针对 405。
+func (r *Router) resolveNoMethod(c *Ctx, path string) HandlerFunc {
+	return r.resolveNotFound(c, path, func(g *RouterGroup) HandlerFunc { return g.noMethod })
+}
+
+// resolveNotFound 在匹配 path 的分组中选取 prefix 最长且注册了处理器的那一个，
+// 保证最内层的 NoRoute/NoMethod 优先。
+func (r *Router) resolveNotFound(c *Ctx, path string, pick func(*RouterGroup) HandlerFunc) HandlerFunc {
+	if c.app == nil {
+		return nil
+	}
+	best := HandlerFunc(nil)
+	bestLen := -1
+	for _, g := range c.app.groups {
+		if !groupMatchesPath(g.prefix, path) {
+			continue
+		}
+		if h := pick(g); h != nil && len(g.prefix) > bestLen {
+			best = h
+			bestLen = len(g.prefix)
+		}
+	}
+	return best
 }

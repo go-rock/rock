@@ -4,7 +4,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -140,9 +139,7 @@ func (app *App) collectMiddlewares(path string) []HandlerFunc {
 	// 按路径段匹配：组前缀 "/admin" 只匹配 "/admin" 或 "/admin/..."，
 	// 避免把 "/admin" 组的中间件误套到 "/administrator" 这类同前缀路径上。
 	for _, group := range app.groups {
-		// 根分组（prefix==""）匹配所有路径；其余按路径段匹配
-		matched := group.prefix == "" || path == group.prefix || strings.HasPrefix(path, group.prefix+"/")
-		if len(group.middlewares) > 0 && matched {
+		if len(group.middlewares) > 0 && groupMatchesPath(group.prefix, path) {
 			for i, handler := range group.middlewares {
 				// 简单的优先级策略：group的深度和中间件在组中的位置
 				priority := len(group.prefix)*100 + i

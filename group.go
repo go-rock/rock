@@ -3,6 +3,7 @@ package rock
 import (
 	"net/http"
 	"path"
+	"strings"
 )
 
 type RouterGroup struct {
@@ -10,6 +11,15 @@ type RouterGroup struct {
 	middlewares []HandlerFunc // support middleware
 	parent      *RouterGroup  // support nesting
 	app         *App          // all groups share a Engine instance
+	noRoute     HandlerFunc   // 该分组路径下的 404 处理（per-group）
+	noMethod    HandlerFunc   // 该分组路径下的 405 处理（per-group）
+}
+
+// groupMatchesPath 判断分组的 prefix 是否按路径段匹配 path。
+// 根分组（prefix==""）匹配所有路径；"/admin" 只匹配 "/admin" 或 "/admin/..."，
+// 不会误匹配 "/administrator"。
+func groupMatchesPath(prefix, path string) bool {
+	return prefix == "" || path == prefix || strings.HasPrefix(path, prefix+"/")
 }
 
 func (group *RouterGroup) RegisterView(viewEngine ViewEngine) {
@@ -101,12 +111,16 @@ func (group *RouterGroup) ClearMiddleware() {
 	group.middlewares = []HandlerFunc{}
 }
 
+// NoRoute 为当前分组及其子路径注册 404 处理函数（per-group）。
+// 与全局 NoRoute 不同，它只作用于匹配该分组 prefix 的路径；
+// 未命中任何注册了 NoRoute 的分组时，回退到根分组（app.NoRoute）。
 func (group *RouterGroup) NoRoute(handler HandlerFunc) {
-	group.app.router.noRoute = handler
+	group.noRoute = handler
 }
 
+// NoMethod 为当前分组注册 405 处理函数，作用范围同 NoRoute。
 func (group *RouterGroup) NoMethod(handler HandlerFunc) {
-	group.app.router.noMethod = handler
+	group.noMethod = handler
 }
 
 // create static handler
