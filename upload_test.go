@@ -465,6 +465,122 @@ func TestUploadTextMIME(t *testing.T) {
 	os.RemoveAll("./test_uploads")
 }
 
+func TestDefaultFileUploadConfig(t *testing.T) {
+	c := DefaultFileUploadConfig()
+	if c.MaxFileSize != 10*1024*1024 {
+		t.Errorf("默认 MaxFileSize 应为 10MB, got %d", c.MaxFileSize)
+	}
+	if len(c.AllowedExtensions) == 0 || len(c.AllowedMimeTypes) == 0 {
+		t.Error("默认配置应有扩展名和 MIME 白名单")
+	}
+	if !c.GenerateUniqueName {
+		t.Error("默认应生成唯一文件名")
+	}
+}
+
+func TestGetUploadHandler(t *testing.T) {
+	app := New()
+	app.Use(GetUploadHandler(DefaultFileUploadConfig()))
+	app.Post("/u", func(c Context) {
+		c.String(200, "handled")
+	})
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	// 构造 multipart 请求
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, _ := writer.CreateFormFile("file", "a.png")
+	part.Write([]byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'})
+	writer.Close()
+
+	req, _ := http.NewRequest("POST", server.URL+"/u", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	resp, err := server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("Failed: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Errorf("GetUploadHandler 后应 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestUploadConvenienceMethods(t *testing.T) {
+	defer os.RemoveAll("./uploads")
+
+	app := New()
+	app.Post("/img", func(c Context) {
+		info, err := c.UploadSingleImage("file")
+		if err != nil {
+			c.JSON(400, M{"e": err.Error()})
+			return
+		}
+		c.JSON(200, M{"ok": info.Filename != ""})
+	})
+	app.Post("/doc", func(c Context) {
+		info, err := c.UploadSingleDocument("file")
+		if err != nil {
+			c.JSON(400, M{"e": err.Error()})
+			return
+		}
+		c.JSON(200, M{"ok": info.Filename != ""})
+	})
+	app.Post("/multi", func(c Context) {
+		infos, err := c.UploadMultipleImages("files")
+		if err != nil {
+			c.JSON(400, M{"e": err.Error()})
+			return
+		}
+		c.JSON(200, M{"ok": len(infos) == 2})
+	})
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	// 图片上传
+	body := &bytes.Buffer{}
+	w := multipart.NewWriter(body)
+	p, _ := w.CreateFormFile("file", "a.png")
+	p.Write([]byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'})
+	w.Close()
+	req, _ := http.NewRequest("POST", server.URL+"/img", body)
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	resp, _ := server.Client().Do(req)
+	if resp.StatusCode != 200 {
+		t.Errorf("图片上传应成功, got %d", resp.StatusCode)
+	}
+
+	// 文档上传（txt）
+	body2 := &bytes.Buffer{}
+	w2 := multipart.NewWriter(body2)
+	p2, _ := w2.CreateFormFile("file", "b.txt")
+	p2.Write([]byte("hello"))
+	w2.Close()
+	req2, _ := http.NewRequest("POST", server.URL+"/doc", body2)
+	req2.Header.Set("Content-Type", w2.FormDataContentType())
+	resp2, _ := server.Client().Do(req2)
+	if resp2.StatusCode != 200 {
+		t.Errorf("文档上传应成功, got %d", resp2.StatusCode)
+	}
+
+	// 多图上传
+	body3 := &bytes.Buffer{}
+	w3 := multipart.NewWriter(body3)
+	for _, name := range []string{"x.png", "y.png"} {
+		p3, _ := w3.CreateFormFile("files", name)
+		p3.Write([]byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'})
+	}
+	w3.Close()
+	req3, _ := http.NewRequest("POST", server.URL+"/multi", body3)
+	req3.Header.Set("Content-Type", w3.FormDataContentType())
+	resp3, _ := server.Client().Do(req3)
+	if resp3.StatusCode != 200 {
+		t.Errorf("多图上传应成功, got %d", resp3.StatusCode)
+	}
+}
+
 func TestUploadBodyLimit(t *testing.T) {
 	app := New()
 	app.Post("/upload", func(c Context) {

@@ -2,7 +2,9 @@ package rock
 
 import (
 	"bytes"
+	"io"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -139,5 +141,104 @@ func TestLoggerWithCaller(t *testing.T) {
 	output := buf.String()
 	if output == "" {
 		t.Error("Expected log output with caller info")
+	}
+}
+
+func TestLogLevelString(t *testing.T) {
+	if LevelDebug.String() != "DEBUG" {
+		t.Errorf("LevelDebug 应为 DEBUG, got %q", LevelDebug.String())
+	}
+	if LevelInfo.String() != "INFO" || LevelWarn.String() != "WARN" ||
+		LevelError.String() != "ERROR" || LevelFatal.String() != "FATAL" {
+		t.Error("各级别 String() 不正确")
+	}
+	if LogLevel(99).String() != "UNKNOWN" {
+		t.Errorf("未知级别应返回 UNKNOWN, got %q", LogLevel(99).String())
+	}
+}
+
+func TestNewLoggerWithConfigAndLevels(t *testing.T) {
+	var buf bytes.Buffer
+	l := NewLoggerWithConfig(LevelInfo, []io.Writer{&buf}, true)
+
+	if l.GetLevel() != LevelInfo {
+		t.Errorf("初始级别应为 Info, got %v", l.GetLevel())
+	}
+
+	l.SetLevel(LevelWarn)
+	if l.GetLevel() != LevelWarn {
+		t.Errorf("SetLevel(Warn) 后级别应为 Warn, got %v", l.GetLevel())
+	}
+
+	l.AddOutput(&buf)
+	l.Info("info-msg")
+	l.Warn("warn-msg")
+
+	if !strings.Contains(buf.String(), "warn-msg") {
+		t.Errorf("Warn 应写入输出, got %q", buf.String())
+	}
+}
+
+func TestDefaultLoggerGetSet(t *testing.T) {
+	orig := GetDefaultLogger()
+	defer SetDefaultLogger(orig)
+
+	var buf bytes.Buffer
+	l := NewLoggerWithConfig(LevelDebug, []io.Writer{&buf}, false)
+	SetDefaultLogger(l)
+	if GetDefaultLogger() != l {
+		t.Error("SetDefaultLogger/GetDefaultLogger 往返失败")
+	}
+
+	// 全局便捷函数应写入默认 logger
+	Debug("dbg")
+	Info("inf")
+	Debugf("dbg-%d", 1)
+	Infof("inf-%d", 1)
+	Warn("wrn")
+	Warnf("wrn-%d", 1)
+	Error("err")
+	Errorf("err-%d", 1)
+
+	if buf.Len() == 0 {
+		t.Error("全局日志函数应写入默认 logger 的输出")
+	}
+}
+
+func TestGetCallerAndExtract(t *testing.T) {
+	file, line, fn := GetCaller()
+	if file == "" || line == 0 || fn == "" {
+		t.Errorf("GetCaller 应返回有效信息, got %s:%d %s", file, line, fn)
+	}
+
+	if extractFunctionName("a.b.C") != "C" {
+		t.Errorf("extractFunctionName 应取最后一段, got %q", extractFunctionName("a.b.C"))
+	}
+	if extractFileName("/x/y/z.go") != "z.go" {
+		t.Errorf("extractFileName 应取文件名, got %q", extractFileName("/x/y/z.go"))
+	}
+}
+
+func TestWrapLoggerWithCaller(t *testing.T) {
+	var buf bytes.Buffer
+	l := NewLoggerWithConfig(LevelDebug, []io.Writer{&buf}, false)
+	w := WrapLoggerWithCaller(l)
+
+	w.Debug("d")
+	w.Debugf("df-%d", 1)
+	w.Info("i")
+	w.Infof("if-%d", 1)
+	w.Warn("w")
+	w.Warnf("wf-%d", 1)
+	w.Error("e")
+	w.Errorf("ef-%d", 1)
+
+	w.SetLevel(LevelInfo)
+	if w.GetLevel() != LevelInfo {
+		t.Error("LoggerWithCaller.SetLevel 应生效")
+	}
+	w.AddOutput(&buf)
+	if buf.Len() == 0 {
+		t.Error("LoggerWithCaller 应写入输出")
 	}
 }

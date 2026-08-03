@@ -634,6 +634,144 @@ func TestContextStatusLazyWriteHeader(t *testing.T) {
 	}
 }
 
+func TestContextMustAccessors(t *testing.T) {
+	app := New()
+	app.Get("/users/:id", func(c Context) {
+		c.JSON(200, M{
+			"id": c.MustParamInt("id", 0),
+			"q1": c.MustQueryInt("n", 5),
+			"q2": c.MustQueryString("s", "def"),
+		})
+	})
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	// 正常参数
+	resp, _ := server.Client().Get(server.URL + "/users/42?n=7&s=hello")
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if !strings.Contains(string(body), `"id":42`) || !strings.Contains(string(body), `"q1":7`) || !strings.Contains(string(body), `"q2":"hello"`) {
+		t.Errorf("正常参数解析错误: %s", body)
+	}
+
+	// 非法参数 → 回退默认值
+	resp2, _ := server.Client().Get(server.URL + "/users/abc")
+	body2, _ := io.ReadAll(resp2.Body)
+	resp2.Body.Close()
+	if !strings.Contains(string(body2), `"id":0`) || !strings.Contains(string(body2), `"q1":5`) || !strings.Contains(string(body2), `"q2":"def"`) {
+		t.Errorf("非法参数应回退默认值: %s", body2)
+	}
+}
+
+func TestContextAttachmentInline(t *testing.T) {
+	app := New()
+	app.Get("/att", func(c Context) {
+		c.Attachment(strings.NewReader("file-data"), "a.txt")
+	})
+	app.Get("/inl", func(c Context) {
+		c.Inline(strings.NewReader("file-data"), "a.txt")
+	})
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	resp, _ := server.Client().Get(server.URL + "/att")
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if string(body) != "file-data" {
+		t.Errorf("Attachment body 错误: %q", body)
+	}
+	if !strings.HasPrefix(resp.Header.Get("Content-Disposition"), "attachment;") {
+		t.Errorf("Attachment 应设置 Content-Disposition, got %q", resp.Header.Get("Content-Disposition"))
+	}
+
+	resp2, _ := server.Client().Get(server.URL + "/inl")
+	body2, _ := io.ReadAll(resp2.Body)
+	resp2.Body.Close()
+	if string(body2) != "file-data" {
+		t.Errorf("Inline body 错误: %q", body2)
+	}
+	if !strings.HasPrefix(resp2.Header.Get("Content-Disposition"), "inline;") {
+		t.Errorf("Inline 应设置 Content-Disposition, got %q", resp2.Header.Get("Content-Disposition"))
+	}
+}
+
+func TestContextApplicationAndView(t *testing.T) {
+	app := New()
+	app.Get("/", func(c Context) {
+		if c.Application() != app {
+			t.Error("Application() 应返回 app")
+		}
+		if c.GetView() != app.GetView() {
+			t.Error("GetView() 应返回 app 的 view")
+		}
+		c.String(200, "ok")
+	})
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+	resp, err := server.Client().Get(server.URL + "/")
+	if err != nil {
+		t.Fatalf("Failed: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Errorf("应 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestResetRequestClearsState(t *testing.T) {
+	c := &Ctx{}
+	c.newContext(httptest.NewRecorder(), httptest.NewRequest("GET", "/a", nil))
+	c.values.Set("k", "v")
+	c.data = M{"x": 1}
+	c.params = Map{"p": "1"}
+	c.handlers = []HandlerFunc{func(Context) {}}
+	c.statusCode = 201
+
+	c.ResetRequest(httptest.NewRequest("GET", "/b", nil))
+
+	if c.Path != "/b" {
+		t.Errorf("Path 应重置为 /b, got %q", c.Path)
+	}
+	if c.values.Get("k") != nil {
+		t.Error("ResetRequest 应清空 values")
+	}
+	if c.data != nil || c.params != nil || c.handlers != nil {
+		t.Error("ResetRequest 应清空 data/params/handlers")
+	}
+	if c.statusCode != http.StatusOK {
+		t.Errorf("statusCode 应重置为 200, got %d", c.statusCode)
+	}
+}
+
+func TestContextDataMethods(t *testing.T) {
+	app := New()
+	app.Get("/", func(c Context) {
+		c.SetData(M{"x": 1})
+		if d := c.Data(); d["x"] != 1 {
+			t.Errorf("SetData/Data 错误: %v", d)
+		}
+		c.Set("y", 2)
+		if v, ok := c.Get("y"); !ok || v != 2 {
+			t.Errorf("Set/Get 错误: %v %v", v, ok)
+		}
+		c.String(200, "ok")
+	})
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+	resp, err := server.Client().Get(server.URL + "/")
+	if err != nil {
+		t.Fatalf("Failed: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Errorf("应 200, got %d", resp.StatusCode)
+	}
+}
+
 func TestClientIPTrustProxy(t *testing.T) {
 	app := New()
 	app.Get("/ip", func(c Context) { c.String(200, "%s", c.ClientIP()) })

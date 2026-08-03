@@ -68,6 +68,8 @@ type (
 		Abort()
 		AbortWithStatusJSON(code int, jsonObj interface{})
 		Redirect(url string)
+		Attachment(r io.Reader, filename string) (err error)
+		Inline(r io.Reader, filename string) (err error)
 
 		// Post body
 
