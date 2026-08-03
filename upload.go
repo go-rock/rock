@@ -1,6 +1,7 @@
 package rock
 
 import (
+	"crypto/rand"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -16,6 +17,11 @@ type FileUploadConfig struct {
 	// 文件大小限制 (字节)
 	MaxFileSize int64
 
+	// 整个请求体的大小上限 (字节)。
+	// 0 表示按 MaxFileSize 的 10 倍 + 1MB 自动计算。
+	// 用于在解析 multipart 前就限制请求体大小，防止超大 body 打满内存/磁盘。
+	MaxTotalSize int64
+
 	// 允许的文件类型
 	AllowedExtensions []string
 
@@ -30,6 +36,27 @@ type FileUploadConfig struct {
 
 	// 文件名前缀
 	FilenamePrefix string
+}
+
+// uploadBodyLimit 计算上传请求体的总上限。
+func uploadBodyLimit(cfg *FileUploadConfig) int64 {
+	if cfg.MaxTotalSize > 0 {
+		return cfg.MaxTotalSize
+	}
+	if cfg.MaxFileSize > 0 {
+		// 按最多约 10 个文件 + 1MB 的 multipart 开销估算
+		return cfg.MaxFileSize*10 + (1 << 20)
+	}
+	return 100 << 20 // 100MB 兜底
+}
+
+// randomSuffix 生成一个短随机十六进制后缀，避免并发上传时文件名撞车。
+func randomSuffix() string {
+	b := make([]byte, 4)
+	if _, err := rand.Read(b); err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%x", b)
 }
 
 // FileInfo 文件信息
@@ -147,6 +174,9 @@ func ValidateMIMEType(fh *multipart.FileHeader, config *FileUploadConfig) error 
 
 // SaveSingleFile 保存单个文件
 func SaveSingleFile(c Context, name string, config *FileUploadConfig) (*FileInfo, error) {
+	// 解析前就限制请求体大小，防止超大 body 打满内存/磁盘
+	c.Request().Body = http.MaxBytesReader(c.Writer(), c.Request().Body, uploadBodyLimit(config))
+
 	fh, err := c.FormFile(name)
 	if err != nil {
 		return nil, NewError(ErrBadRequest, "Failed to get file: %v", err)
@@ -185,6 +215,9 @@ func SaveSingleFile(c Context, name string, config *FileUploadConfig) (*FileInfo
 
 // SaveMultipleFiles 保存多个文件
 func SaveMultipleFiles(c Context, name string, config *FileUploadConfig) ([]*FileInfo, error) {
+	// 解析前就限制请求体大小，防止超大 body 打满内存/磁盘
+	c.Request().Body = http.MaxBytesReader(c.Writer(), c.Request().Body, uploadBodyLimit(config))
+
 	// 解析multipart表单
 	if err := c.ParseMultipartForm(config.MaxFileSize); err != nil {
 		return nil, NewError(ErrBadRequest, "Failed to parse multipart form: %v", err)
@@ -248,9 +281,10 @@ func saveFileToDisk(fh *multipart.FileHeader, config *FileUploadConfig) (string,
 	var filename string
 	if config.GenerateUniqueName {
 		ext := getFileExtension(fh.Filename)
-		filename = fmt.Sprintf("%s%d%s",
+		filename = fmt.Sprintf("%s%d%s%s",
 			config.FilenamePrefix,
 			time.Now().UnixNano(),
+			randomSuffix(),
 			ext)
 	} else {
 		filename = fh.Filename

@@ -22,6 +22,13 @@ type Configuration struct {
 	//
 	// Defaults to "rock.view.fallback".
 	FallbackViewContextKey string `ini:"fallback_view_context_key" json:"fallbackViewContextKey,omitempty" yaml:"FallbackViewContextKey" toml:"FallbackViewContextKey"`
+
+	// TrustProxyHeaders 控制 ClientIP 是否信任 X-Real-IP / X-Forwarded-For 头。
+	// 仅当应用部署在可信反向代理（nginx/haproxy 等）之后时才应开启；
+	// 直接暴露在公网时这些头可被客户端伪造，开启会允许伪造客户端 IP。
+	//
+	// 默认 false：只使用 RemoteAddr 作为客户端 IP。
+	TrustProxyHeaders bool `ini:"trust_proxy_headers" json:"trustProxyHeaders,omitempty" yaml:"TrustProxyHeaders" toml:"TrustProxyHeaders"`
 }
 
 func DefaultConfiguration() Configuration {
@@ -30,6 +37,7 @@ func DefaultConfiguration() Configuration {
 		ViewLayoutContextKey:   "rock.view.layout",
 		ViewDataContextKey:     "rock.view.data",
 		FallbackViewContextKey: "rock.view.fallback",
+		TrustProxyHeaders:      false, // 默认不信任代理头，防止伪造客户端 IP
 	}
 }
 

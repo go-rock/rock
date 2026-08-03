@@ -101,6 +101,9 @@ func (r *Store) GetDefault(key string, def interface{}) interface{} {
 // Value returns the value of the entry,
 // respects the immutable.
 func (e Entry) Value() interface{} {
+	if e.ValueRaw == nil {
+		return nil
+	}
 	if e.immutable {
 		// take its value, no pointer even if set with a reference.
 		vv := reflect.Indirect(reflect.ValueOf(e.ValueRaw))

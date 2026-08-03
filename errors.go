@@ -88,10 +88,13 @@ func WriteError(c Context, statusCode int, err error) {
 			Detail:  e.Error(),
 		}
 	default:
-		// 未知错误类型
+		// 未知错误类型：生产环境不向客户端暴露内部错误细节
 		httpErr = HTTPError{
 			Code:    statusCode,
-			Message: err.Error(),
+			Message: "Internal Server Error",
+		}
+		if IsDebugging() {
+			httpErr.Detail = err.Error()
 		}
 	}
 
@@ -146,22 +149,6 @@ type ValidationError struct {
 
 func (e *ValidationError) Error() string {
 	return fmt.Sprintf("validation error: %s - %s", e.Field, e.Message)
-}
-
-// ValidateRequest 验证请求参数
-func ValidateRequest(c Context, params map[string]interface{}) []ValidationError {
-	var errors []ValidationError
-
-	for field, rules := range params {
-		if rules == nil || rules == "" {
-			errors = append(errors, ValidationError{
-				Field:   field,
-				Message: "field is required",
-			})
-		}
-	}
-
-	return errors
 }
 
 // HandlePanic 处理panic恢复

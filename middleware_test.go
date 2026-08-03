@@ -490,3 +490,64 @@ func TestMiddlewarePerformance(t *testing.T) {
 		t.Errorf("Expected status 200, got %d", resp.StatusCode)
 	}
 }
+
+func TestMiddlewareGroupPrefixSegmentMatch(t *testing.T) {
+	app := New()
+
+	// /admin 组的中间件只应作用于 /admin 前缀的路径
+	admin := app.Group("/admin")
+	admin.Use(func(c Context) {
+		c.SetHeader("X-Admin", "yes")
+		c.Next()
+	})
+	admin.Get("/x", func(c Context) { c.Status(200) })
+
+	// /administrator 是不同路径，不应命中 /admin 组中间件
+	app.Get("/administrator", func(c Context) { c.Status(200) })
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	resp, err := server.Client().Get(server.URL + "/admin/x")
+	if err != nil {
+		t.Fatalf("Failed to GET /admin/x: %v", err)
+	}
+	resp.Body.Close()
+	if resp.Header.Get("X-Admin") != "yes" {
+		t.Error("expected /admin/x to run /admin middleware")
+	}
+
+	resp2, err := server.Client().Get(server.URL + "/administrator")
+	if err != nil {
+		t.Fatalf("Failed to GET /administrator: %v", err)
+	}
+	resp2.Body.Close()
+	if resp2.Header.Get("X-Admin") != "" {
+		t.Error("bug: /administrator 不应运行 /admin 组的中间件")
+	}
+}
+
+func TestMiddlewareRunsOnNoRoute(t *testing.T) {
+	app := New()
+	app.Use(func(c Context) {
+		c.SetHeader("X-Global", "ran")
+		c.Next()
+	})
+	// 不注册 /missing 路由
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	resp, err := server.Client().Get(server.URL + "/missing")
+	if err != nil {
+		t.Fatalf("Failed to GET /missing: %v", err)
+	}
+	resp.Body.Close()
+
+	if resp.StatusCode != 404 {
+		t.Errorf("expected 404, got %d", resp.StatusCode)
+	}
+	if resp.Header.Get("X-Global") != "ran" {
+		t.Error("bug: 404 路径没有执行全局中间件")
+	}
+}

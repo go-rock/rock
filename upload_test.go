@@ -410,10 +410,55 @@ func BenchmarkFileUpload(b *testing.B) {
 		req := httptest.NewRequest("POST", "/upload", body)
 		req.Header.Set("Content-Type", writer.FormDataContentType())
 		w := httptest.NewRecorder()
-		
+
 		app.ServeHTTP(w, req)
 	}
 
 	// 清理
 	os.RemoveAll("./benchmark_uploads")
+}
+
+func TestUploadBodyLimit(t *testing.T) {
+	app := New()
+	app.Post("/upload", func(c Context) {
+		config := &FileUploadConfig{
+			MaxFileSize:        0,    // 不设单文件限制，仅靠总 body 上限拦截
+			MaxTotalSize:       1024, // 1KB 总上限
+			AllowedExtensions:  []string{".txt"},
+			GenerateUniqueName: false,
+			SaveDir:            "./test_uploads",
+		}
+		_, err := c.SaveSingleFile("file", config)
+		if err != nil {
+			c.JSON(400, M{"error": err.Error()})
+			return
+		}
+		c.JSON(200, M{"success": true})
+	})
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	// 发送 2KB 的 body，超过 1KB 总上限，应被 MaxBytesReader 拒绝
+	_largeContent := bytes.Repeat([]byte("a"), 2*1024)
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, _ := writer.CreateFormFile("file", "big.txt")
+	part.Write(_largeContent)
+	writer.Close()
+
+	req, _ := http.NewRequest("POST", server.URL+"/upload", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	resp, err := server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("Failed to upload: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 400 {
+		t.Errorf("超过总 body 上限应返回 400, got %d", resp.StatusCode)
+	}
+
+	os.RemoveAll("./test_uploads")
 }

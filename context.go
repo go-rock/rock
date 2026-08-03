@@ -401,7 +401,8 @@ func (c *Ctx) ParseMultipartForm(maxMemory int64) error {
 // Example if header was "application/json" would decode using
 // json.NewDecoder(io.LimitReader(c.request.Body, maxMemory)).Decode(v).
 func (c *Ctx) Decode(v interface{}, args ...interface{}) (err error) {
-	var maxMemory int64 = 10000
+	// 默认 10MB，避免 >10KB 的 JSON/XML body 被截断导致绑定失败
+	var maxMemory int64 = 10 << 20
 	var includeFormQueryParams bool = false
 	if len(args) > 0 {
 		result, ok := args[0].(bool)
@@ -486,27 +487,33 @@ func (c *Ctx) AbortWithStatusJSON(code int, jsonObj interface{}) {
 
 // ClientIP implements a best effort algorithm to return the real client IP, it parses
 // X-Real-IP and X-Forwarded-For in order to work properly with reverse-proxies such us: nginx or haproxy.
+// 注意：只有当配置了 TrustProxyHeaders 时才信任这些头，
+// 否则客户端可以伪造它们来绕过基于 IP 的限流/封禁/审计。
 func (c *Ctx) ClientIP() (clientIP string) {
-	var values []string
+	trustProxy := c.app != nil && c.app.config != nil && c.app.config.TrustProxyHeaders
 
-	if values, _ = c.request.Header[XRealIP]; len(values) > 0 {
+	if trustProxy {
+		var values []string
 
-		clientIP = strings.TrimSpace(values[0])
-		if clientIP != blank {
-			return
-		}
-	}
+		if values, _ = c.request.Header[XRealIP]; len(values) > 0 {
 
-	if values, _ = c.request.Header[XForwardedFor]; len(values) > 0 {
-		clientIP = values[0]
-
-		if index := strings.IndexByte(clientIP, ','); index >= 0 {
-			clientIP = clientIP[0:index]
+			clientIP = strings.TrimSpace(values[0])
+			if clientIP != blank {
+				return
+			}
 		}
 
-		clientIP = strings.TrimSpace(clientIP)
-		if clientIP != blank {
-			return
+		if values, _ = c.request.Header[XForwardedFor]; len(values) > 0 {
+			clientIP = values[0]
+
+			if index := strings.IndexByte(clientIP, ','); index >= 0 {
+				clientIP = clientIP[0:index]
+			}
+
+			clientIP = strings.TrimSpace(clientIP)
+			if clientIP != blank {
+				return
+			}
 		}
 	}
 

@@ -102,6 +102,8 @@ func (app *App) Run(args ...string) (err error) {
 
 func (app *App) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	c := app.createContext(w, req)
+	// 无论 handler 是否 panic，都要把 Context 归还对象池
+	defer app.pool.Put(c)
 
 	// 记录请求开始时间
 	startTime := time.Now()
@@ -123,9 +125,6 @@ func (app *App) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		latency := time.Since(startTime)
 		app.logger.RequestLog(req.Method, req.URL.Path, ip, userAgent, statusCode, latency)
 	}
-
-	// 释放Context到对象池
-	app.pool.Put(c)
 }
 
 // collectMiddlewares 收集并排序中间件
@@ -138,8 +137,12 @@ func (app *App) collectMiddlewares(path string) []HandlerFunc {
 	var middlewareList []middlewareWithPriority
 
 	// 收集所有匹配的中间件
+	// 按路径段匹配：组前缀 "/admin" 只匹配 "/admin" 或 "/admin/..."，
+	// 避免把 "/admin" 组的中间件误套到 "/administrator" 这类同前缀路径上。
 	for _, group := range app.groups {
-		if strings.HasPrefix(path, group.prefix) && len(group.middlewares) > 0 {
+		// 根分组（prefix==""）匹配所有路径；其余按路径段匹配
+		matched := group.prefix == "" || path == group.prefix || strings.HasPrefix(path, group.prefix+"/")
+		if len(group.middlewares) > 0 && matched {
 			for i, handler := range group.middlewares {
 				// 简单的优先级策略：group的深度和中间件在组中的位置
 				priority := len(group.prefix)*100 + i
@@ -174,6 +177,12 @@ func (app *App) collectMiddlewares(path string) []HandlerFunc {
 // ConfigurationReadOnly returns an object which doesn't allow field writing.
 func (app *App) ConfigurationReadOnly() *Configuration {
 	return app.config
+}
+
+// SetTrustProxy 控制是否信任反向代理设置的头（X-Real-IP / X-Forwarded-For）。
+// 仅当应用部署在可信反向代理之后时才应开启，默认关闭。
+func (app *App) SetTrustProxy(enabled bool) {
+	app.config.TrustProxyHeaders = enabled
 }
 
 func (app *App) View(writer io.Writer, filename string, bindingData interface{}) error {

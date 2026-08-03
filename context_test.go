@@ -632,6 +632,41 @@ func TestContextStatusLazyWriteHeader(t *testing.T) {
 	}
 }
 
+func TestClientIPTrustProxy(t *testing.T) {
+	app := New()
+	app.Get("/ip", func(c Context) { c.String(200, "%s", c.ClientIP()) })
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	// 默认不信任代理头，应使用 RemoteAddr 而非 X-Forwarded-For
+	req, _ := http.NewRequest("GET", server.URL+"/ip", nil)
+	req.Header.Set("X-Forwarded-For", "203.0.113.7")
+	resp, err := server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("Failed to GET /ip: %v", err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if string(body) == "203.0.113.7" {
+		t.Error("默认应忽略 X-Forwarded-For，使用 RemoteAddr")
+	}
+
+	// 开启信任后应使用代理头
+	app.SetTrustProxy(true)
+	req2, _ := http.NewRequest("GET", server.URL+"/ip", nil)
+	req2.Header.Set("X-Forwarded-For", "203.0.113.7")
+	resp2, err := server.Client().Do(req2)
+	if err != nil {
+		t.Fatalf("Failed to GET /ip: %v", err)
+	}
+	body2, _ := io.ReadAll(resp2.Body)
+	resp2.Body.Close()
+	if string(body2) != "203.0.113.7" {
+		t.Errorf("开启 TrustProxy 后应使用 X-Forwarded-For, got %q", body2)
+	}
+}
+
 func BenchmarkContext(b *testing.B) {
 	app := New()
 

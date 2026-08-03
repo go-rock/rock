@@ -59,8 +59,10 @@ func (r *Router) handle(c *Ctx) {
 	method := req.Method
 	res := r.trie.Match(path)
 
-	// FixedPathRedirect or TrailingSlashRedirect
+	// 所有响应（包括 404/405/OPTIONS/重定向）都作为链上的最后一个 handler，
+	// 保证全局中间件（日志、鉴权、Recovery 等）对未匹配路径同样生效。
 	if res.TSR != "" || res.FPR != "" {
+		// FixedPathRedirect or TrailingSlashRedirect
 		req.URL.Path = res.TSR
 		if res.FPR != "" {
 			req.URL.Path = res.FPR
@@ -69,47 +71,50 @@ func (r *Router) handle(c *Ctx) {
 		if method != "GET" {
 			code = 307
 		}
-		http.Redirect(w, req, req.URL.String(), code)
-		return
-	}
-
-	if res.Node == nil {
-		if r.noRoute == nil {
-			// 使用统一的错误处理
-			WriteError(c, 404, NewAppError(ErrNotFound, "Route Not Found"))
-			return
+		redirectURL := req.URL.String()
+		handler = func(ctx Context) {
+			http.Redirect(w, req, redirectURL, code)
 		}
-		handler = r.noRoute
-	} else {
-		// ok := false
-		hd := res.Node.GetHandler(method)
-		if hd == nil {
-			handler = nil
-		} else if hf, ok := hd.(HandlerFunc); ok {
-			handler = hf
+	} else if res.Node == nil {
+		// 无匹配路由：默认 404 或自定义 noRoute
+		if r.noRoute == nil {
+			handler = func(ctx Context) {
+				WriteError(ctx, 404, NewAppError(ErrNotFound, "Route Not Found"))
+			}
 		} else {
+			handler = r.noRoute
+		}
+	} else {
+		hd := res.Node.GetHandler(method)
+		if hf, ok := hd.(HandlerFunc); ok {
+			handler = hf
+		} else if hd != nil {
 			// 尝试包装其他类型的处理器
 			wrappedHandler, err := r.wrapHandler(hd)
 			if err != nil {
-				WriteError(c, 500, NewAppError(ErrInternalServer, fmt.Sprintf("Invalid handler for %s %s: %v", method, path, err)))
-				return
+				handler = func(ctx Context) {
+					WriteError(ctx, 500, NewAppError(ErrInternalServer, fmt.Sprintf("Invalid handler for %s %s: %v", method, path, err)))
+				}
+			} else {
+				handler = wrappedHandler
 			}
-			handler = wrappedHandler
 		}
 		if handler == nil {
-			// OPTIONS support
+			// 节点存在但没有匹配的 method
 			if method == http.MethodOptions {
-				w.Header().Set("Allow", res.Node.GetAllow())
-				w.WriteHeader(204)
-				return
+				// OPTIONS support
+				handler = func(ctx Context) {
+					ctx.SetHeader("Allow", res.Node.GetAllow())
+					ctx.Status(http.StatusNoContent)
+					ctx.Write(nil)
+				}
+			} else if r.noMethod == nil {
+				handler = func(ctx Context) {
+					WriteError(ctx, 405, NewAppError(ErrMethodNotAllow, fmt.Sprintf(`Method "%s" not allowed in "%s"`, method, path)))
+				}
+			} else {
+				handler = r.noMethod
 			}
-
-			if r.noMethod == nil {
-				// 使用统一的错误处理
-				WriteError(c, 405, NewAppError(ErrMethodNotAllow, fmt.Sprintf(`Method "%s" not allowed in "%s"`, method, path)))
-				return
-			}
-			handler = r.noMethod
 		}
 	}
 
