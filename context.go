@@ -138,6 +138,7 @@ func (c *Ctx) ResetRequest(r *http.Request) {
 	// 重置状态数据以防止污染
 	c.params = nil
 	c.data = nil
+	c.handlers = nil // 清掉上个请求的处理器链，避免复用 Ctx 时误执行旧 handler
 	// 每个请求都应使用全新的 Store，
 	// 否则对象池复用时会泄漏上个请求通过 Values/ViewData 写入的数据。
 	// 同一请求内的中间件通过共享的 c 访问 values，不需要跨请求保留。
