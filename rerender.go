@@ -8,7 +8,7 @@ import (
 func (c *Ctx) HTML(name string, viewData ...interface{}) {
 	c.SetHeader("Content-Type", "text/html")
 	if err := c.renderView(name, viewData...); err != nil {
-		c.String(500, err.Error())
+		c.String(500, "%s", err.Error())
 	}
 }
 
