@@ -169,6 +169,37 @@ func TestGroupNoRoute(t *testing.T) {
 	}
 }
 
+func TestRedirectKeepsOriginalPath(t *testing.T) {
+	app := New()
+
+	var seenPath string
+	app.Use(func(c Context) {
+		seenPath = c.Request().URL.Path // 中间件读到的应是原始路径
+		c.Next()
+	})
+	app.Get("/foo", func(c Context) { c.String(200, "ok") })
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	// /foo/ 触发 TrailingSlashRedirect 到 /foo
+	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse // 不跟随
+	}}
+	resp, err := client.Get(server.URL + "/foo/")
+	if err != nil {
+		t.Fatalf("Failed to GET /foo/: %v", err)
+	}
+	resp.Body.Close()
+
+	if resp.StatusCode != 301 && resp.StatusCode != 307 {
+		t.Errorf("应返回重定向, got %d", resp.StatusCode)
+	}
+	if seenPath != "/foo/" {
+		t.Errorf("中间件应看到原始路径 /foo/, got %q", seenPath)
+	}
+}
+
 func TestHeadFallsBackToGet(t *testing.T) {
 	app := New()
 	app.Get("/test", func(c Context) {

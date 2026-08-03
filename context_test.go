@@ -699,6 +699,44 @@ func TestGetQueryPresence(t *testing.T) {
 	}
 }
 
+func TestDecodeBodyReusable(t *testing.T) {
+	app := New()
+	app.Post("/bind", func(c Context) {
+		type Req struct {
+			Name string `json:"name"`
+		}
+		var a, b Req
+		if err := c.ShouldBind(&a); err != nil {
+			c.JSON(400, M{"error": err.Error()})
+			return
+		}
+		// 同一请求内第二次 ShouldBind 不应因 body 已消费而失败
+		if err := c.ShouldBind(&b); err != nil {
+			c.JSON(400, M{"error": "second bind: " + err.Error()})
+			return
+		}
+		if a.Name != "x" || b.Name != "x" {
+			c.JSON(400, M{"error": "data mismatch"})
+			return
+		}
+		c.JSON(200, M{"ok": true})
+	})
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	resp, err := server.Client().Post(server.URL+"/bind", "application/json", strings.NewReader(`{"name":"x"}`))
+	if err != nil {
+		t.Fatalf("Failed to POST /bind: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		t.Errorf("二次 ShouldBind 应成功, got %d: %s", resp.StatusCode, body)
+	}
+}
+
 func TestWriteErrorValidation(t *testing.T) {
 	app := New()
 	app.Get("/validate", func(c Context) {

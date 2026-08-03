@@ -59,15 +59,20 @@ func (r *Router) handle(c *Ctx) {
 	// 保证全局中间件（日志、鉴权、Recovery 等）对未匹配路径同样生效。
 	if res.TSR != "" || res.FPR != "" {
 		// FixedPathRedirect or TrailingSlashRedirect
-		req.URL.Path = res.TSR
+		// 在 req.URL 的副本上计算重定向目标，不改动原始路径，
+		// 保证中间件通过 c.Request().URL.Path 看到的仍是原始请求路径
+		targetPath := res.TSR
 		if res.FPR != "" {
-			req.URL.Path = res.FPR
+			targetPath = res.FPR
 		}
+		targetURL := *req.URL
+		targetURL.Path = targetPath
+		redirectURL := targetURL.String()
+
 		code := 301
 		if method != "GET" {
 			code = 307
 		}
-		redirectURL := req.URL.String()
 		handler = func(ctx Context) {
 			http.Redirect(w, req, redirectURL, code)
 		}

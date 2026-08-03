@@ -1,6 +1,7 @@
 package rock
 
 import (
+	"bytes"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -428,10 +429,14 @@ func (c *Ctx) Decode(v interface{}, args ...interface{}) (err error) {
 	switch typ {
 
 	case ApplicationJSON:
-		err = json.NewDecoder(io.LimitReader(c.request.Body, maxMemory)).Decode(v)
+		err = c.decodeBody(func(b []byte) error {
+			return json.NewDecoder(bytes.NewReader(b)).Decode(v)
+		}, maxMemory)
 
 	case ApplicationXML:
-		err = xml.NewDecoder(io.LimitReader(c.request.Body, maxMemory)).Decode(v)
+		err = c.decodeBody(func(b []byte) error {
+			return xml.NewDecoder(bytes.NewReader(b)).Decode(v)
+		}, maxMemory)
 
 	case ApplicationForm:
 
@@ -454,6 +459,18 @@ func (c *Ctx) Decode(v interface{}, args ...interface{}) (err error) {
 		}
 	}
 	return
+}
+
+// decodeBody 读取请求体（带上限）并调用 decode 解析。
+// 读取后把 body 缓存回 request.Body，使同一请求内可以多次 Decode/ShouldBind。
+func (c *Ctx) decodeBody(decode func([]byte) error, maxMemory int64) error {
+	b, err := io.ReadAll(io.LimitReader(c.request.Body, maxMemory))
+	if err != nil {
+		return err
+	}
+	// 缓存 body，支持重复读取
+	c.request.Body = io.NopCloser(bytes.NewReader(b))
+	return decode(b)
 }
 
 func (c *Ctx) ShouldBind(v interface{}, args ...interface{}) (err error) {
