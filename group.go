@@ -75,7 +75,8 @@ func (group *RouterGroup) addRouteWithMiddleware(method, pattern string, handler
 	chain := make(handlerChain, 0, len(mws)+1)
 	chain = append(chain, mws...)
 	chain = append(chain, handler)
-	group.app.router.Handle(method, pattern, chain)
+	// 与 addRoute 一致：补上分组前缀
+	group.app.router.Handle(method, group.prefix+pattern, chain)
 }
 
 // Get 注册一条 GET 路由，可附带只作用于该路由的中间件。

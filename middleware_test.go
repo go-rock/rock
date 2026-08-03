@@ -637,6 +637,29 @@ func TestRouteLevelMiddlewareAbort(t *testing.T) {
 	}
 }
 
+func TestRouteLevelMiddlewareWithGroupPrefix(t *testing.T) {
+	app := New()
+	admin := app.Group("/admin")
+	admin.Get("/users", func(c Context) { c.String(200, "users") },
+		func(c Context) { c.SetHeader("X-Auth", "1"); c.Next() })
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	// 分组前缀 + 路由级中间件必须同时生效（曾因 addRouteWithMiddleware 漏拼前缀而 404）
+	resp, err := server.Client().Get(server.URL + "/admin/users")
+	if err != nil {
+		t.Fatalf("Failed: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Errorf("分组前缀下路由应命中, got %d", resp.StatusCode)
+	}
+	if resp.Header.Get("X-Auth") != "1" {
+		t.Error("分组前缀下路由级中间件未生效")
+	}
+}
+
 func TestMiddlewareGroupOrder(t *testing.T) {
 	app := New()
 
