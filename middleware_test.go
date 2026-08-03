@@ -527,6 +527,116 @@ func TestMiddlewareGroupPrefixSegmentMatch(t *testing.T) {
 	}
 }
 
+func TestRouteLevelMiddleware(t *testing.T) {
+	app := New()
+	var order []string
+
+	// 带路由级中间件的路由
+	app.Get("/protected", func(c Context) {
+		order = append(order, "protected-handler")
+		c.String(200, "protected")
+	}, func(c Context) {
+		order = append(order, "mw1")
+		c.Next()
+	}, func(c Context) {
+		order = append(order, "mw2")
+		c.Next()
+	})
+
+	// 不带路由级中间件的路由，不应触发
+	app.Get("/public", func(c Context) {
+		order = append(order, "public-handler")
+		c.String(200, "public")
+	})
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	// /protected：路由级中间件按序在处理器前执行
+	order = nil
+	resp, err := server.Client().Get(server.URL + "/protected")
+	if err != nil {
+		t.Fatalf("Failed: %v", err)
+	}
+	resp.Body.Close()
+	expected := []string{"mw1", "mw2", "protected-handler"}
+	if len(order) != len(expected) {
+		t.Fatalf("执行顺序应为 %v, got %v", expected, order)
+	}
+	for i := range expected {
+		if order[i] != expected[i] {
+			t.Fatalf("执行顺序应为 %v, got %v", expected, order)
+		}
+	}
+
+	// /public：不触发 /protected 的路由级中间件
+	order = nil
+	resp2, err := server.Client().Get(server.URL + "/public")
+	if err != nil {
+		t.Fatalf("Failed: %v", err)
+	}
+	resp2.Body.Close()
+	if len(order) != 1 || order[0] != "public-handler" {
+		t.Errorf("/public 不应触发路由级中间件, got %v", order)
+	}
+}
+
+func TestGroupPlusRouteMiddleware(t *testing.T) {
+	app := New()
+	var order []string
+
+	app.Use(func(c Context) { order = append(order, "group"); c.Next() })
+	app.Get("/x", func(c Context) { order = append(order, "handler"); c.String(200, "ok") },
+		func(c Context) { order = append(order, "route"); c.Next() })
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	resp, err := server.Client().Get(server.URL + "/x")
+	if err != nil {
+		t.Fatalf("Failed: %v", err)
+	}
+	resp.Body.Close()
+
+	// 分组中间件先于路由级中间件
+	expected := []string{"group", "route", "handler"}
+	if len(order) != len(expected) {
+		t.Fatalf("执行顺序应为 %v, got %v", expected, order)
+	}
+	for i := range expected {
+		if order[i] != expected[i] {
+			t.Fatalf("执行顺序应为 %v, got %v", expected, order)
+		}
+	}
+}
+
+func TestRouteLevelMiddlewareAbort(t *testing.T) {
+	app := New()
+	// 路由级鉴权：未通过则中止，处理器不执行
+	var handlerRan bool
+	app.Get("/secret", func(c Context) {
+		handlerRan = true
+		c.String(200, "secret")
+	}, func(c Context) {
+		c.AbortWithStatusJSON(401, M{"error": "unauthorized"})
+	})
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	resp, err := server.Client().Get(server.URL + "/secret")
+	if err != nil {
+		t.Fatalf("Failed: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 401 {
+		t.Errorf("路由级中间件中止应返回 401, got %d", resp.StatusCode)
+	}
+	if handlerRan {
+		t.Error("中间件 Abort 后处理器不应执行")
+	}
+}
+
 func TestMiddlewareGroupOrder(t *testing.T) {
 	app := New()
 

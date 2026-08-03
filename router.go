@@ -24,15 +24,20 @@ func NewRouter(opts ...trie.Options) *Router {
 // 	r.Handle(http.MethodGet, pattern, handler)
 // }
 
-func (r *Router) Handle(method, pattern string, handler HandlerFunc) error {
+func (r *Router) Handle(method, pattern string, handler interface{}) error {
 	if method == "" {
 		return fmt.Errorf("invalid method")
 	}
-	// if r.prefix != "" {
-	// 	pattern = r.prefix + pattern
-	// }
-	hds := []HandlerFunc{}
-	hds = append(hds, handler)
+	// 调试输出用：普通处理器按单元素链展示，handlerChain 按完整链展示
+	var hds HandlersChain
+	switch h := handler.(type) {
+	case handlerChain:
+		hds = HandlersChain(h)
+	case HandlerFunc:
+		hds = HandlersChain{h}
+	default:
+		hds = HandlersChain{}
+	}
 	debugPrintRoute(method, pattern, hds)
 	r.trie.Define(pattern).Handle(strings.ToUpper(method), handler)
 	return nil
@@ -49,6 +54,7 @@ func (r *Router) Handle(method, pattern string, handler HandlerFunc) error {
 // func(r *Router) handle(c htt)
 func (r *Router) handle(c *Ctx) {
 	var handler HandlerFunc
+	var routeChain handlerChain // 路由级中间件 + 处理器链
 	req := c.Request()
 	w := c.Writer()
 	path := req.URL.Path
@@ -91,11 +97,17 @@ func (r *Router) handle(c *Ctx) {
 		if hd == nil && method == http.MethodHead {
 			hd = res.Node.GetHandler(http.MethodGet)
 		}
-		if hf, ok := hd.(HandlerFunc); ok {
-			handler = hf
-		} else if hd != nil {
+		switch h := hd.(type) {
+		case handlerChain:
+			// 路由级中间件 + 处理器：整体追加，不再单独 append 单个 handler
+			routeChain = h
+		case nil:
+			// 节点存在但无匹配 method，走下面的 OPTIONS/405
+		case HandlerFunc:
+			handler = h
+		default:
 			// 尝试包装其他类型的处理器
-			wrappedHandler, err := r.wrapHandler(hd)
+			wrappedHandler, err := r.wrapHandler(h)
 			if err != nil {
 				handler = func(ctx Context) {
 					WriteError(ctx, 500, NewAppError(ErrInternalServer, fmt.Sprintf("Invalid handler for %s %s: %v", method, path, err)))
@@ -104,7 +116,7 @@ func (r *Router) handle(c *Ctx) {
 				handler = wrappedHandler
 			}
 		}
-		if handler == nil {
+		if handler == nil && len(routeChain) == 0 {
 			// 节点存在但没有匹配的 method
 			if method == http.MethodOptions {
 				// OPTIONS support
@@ -126,7 +138,11 @@ func (r *Router) handle(c *Ctx) {
 	if len(res.Params) != 0 {
 		c.params = res.Params
 	}
-	c.handlers = append(c.handlers, handler)
+	if len(routeChain) > 0 {
+		c.handlers = append(c.handlers, routeChain...)
+	} else {
+		c.handlers = append(c.handlers, handler)
+	}
 	c.Next()
 }
 

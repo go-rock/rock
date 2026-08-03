@@ -123,6 +123,17 @@ app.Use(rock.Recovery(), Logger())
 
 内置 `rock.Recovery()` 恢复 panic 并返回统一的 500 响应。
 
+### 路由级中间件
+
+中间件可以只绑定到某一条路由（在处理器之前执行），适合"同一分组下有公有有私有"的场景：
+
+```go
+g.POST("/login", Login)                            // 公开路由：不挂鉴权
+g.GET("/users", ListUser, JWTAuth(secret), RequirePermission(enf)) // 只对该路由挂鉴权
+```
+
+与分组中间件叠加时，执行顺序为：**分组中间件 → 路由级中间件 → 处理器**。
+
 ## 请求上下文
 
 `rock.Context` 封装了完整的请求/响应能力。

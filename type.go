@@ -20,3 +20,7 @@ type PreMiddlewareFunc = HandlerFunc
 
 // Handler 是 HandlerFunc 的别名。
 type Handler = HandlerFunc
+
+// handlerChain 表示一条路由的完整处理器链（路由级中间件 + 处理器），
+// 由带路由级中间件的路由注册产生。
+type handlerChain []HandlerFunc

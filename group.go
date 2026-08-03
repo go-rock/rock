@@ -65,34 +65,47 @@ func (group *RouterGroup) addRoute(method string, comp string, handler HandlerFu
 	group.app.router.Handle(method, pattern, handler)
 }
 
-// Get 注册一条 GET 路由。
-func (group *RouterGroup) Get(pattern string, handler HandlerFunc) {
-	group.addRoute(http.MethodGet, pattern, handler)
+// addRouteWithMiddleware 注册路由；有路由级中间件时打包成 handlerChain 存储，
+// 使这些中间件只作用于该路由（在处理器之前执行）。
+func (group *RouterGroup) addRouteWithMiddleware(method, pattern string, handler HandlerFunc, mws ...HandlerFunc) {
+	if len(mws) == 0 {
+		group.addRoute(method, pattern, handler)
+		return
+	}
+	chain := make(handlerChain, 0, len(mws)+1)
+	chain = append(chain, mws...)
+	chain = append(chain, handler)
+	group.app.router.Handle(method, pattern, chain)
 }
 
-// Post 注册一条 POST 路由。
-func (group *RouterGroup) Post(pattern string, handler HandlerFunc) {
-	group.addRoute(http.MethodPost, pattern, handler)
+// Get 注册一条 GET 路由，可附带只作用于该路由的中间件。
+func (group *RouterGroup) Get(pattern string, handler HandlerFunc, mws ...HandlerFunc) {
+	group.addRouteWithMiddleware(http.MethodGet, pattern, handler, mws...)
 }
 
-// Put 注册一条 PUT 路由。
-func (group *RouterGroup) Put(pattern string, handler HandlerFunc) {
-	group.addRoute(http.MethodPut, pattern, handler)
+// Post 注册一条 POST 路由，可附带只作用于该路由的中间件。
+func (group *RouterGroup) Post(pattern string, handler HandlerFunc, mws ...HandlerFunc) {
+	group.addRouteWithMiddleware(http.MethodPost, pattern, handler, mws...)
 }
 
-// Patch 注册一条 PATCH 路由。
-func (group *RouterGroup) Patch(pattern string, handler HandlerFunc) {
-	group.addRoute(http.MethodPatch, pattern, handler)
+// Put 注册一条 PUT 路由，可附带只作用于该路由的中间件。
+func (group *RouterGroup) Put(pattern string, handler HandlerFunc, mws ...HandlerFunc) {
+	group.addRouteWithMiddleware(http.MethodPut, pattern, handler, mws...)
 }
 
-// Delete 注册一条 DELETE 路由。
-func (group *RouterGroup) Delete(pattern string, handler HandlerFunc) {
-	group.addRoute(http.MethodDelete, pattern, handler)
+// Patch 注册一条 PATCH 路由，可附带只作用于该路由的中间件。
+func (group *RouterGroup) Patch(pattern string, handler HandlerFunc, mws ...HandlerFunc) {
+	group.addRouteWithMiddleware(http.MethodPatch, pattern, handler, mws...)
 }
 
-// Options 注册一条 OPTIONS 路由。
-func (group *RouterGroup) Options(pattern string, handler HandlerFunc) {
-	group.addRoute(http.MethodOptions, pattern, handler)
+// Delete 注册一条 DELETE 路由，可附带只作用于该路由的中间件。
+func (group *RouterGroup) Delete(pattern string, handler HandlerFunc, mws ...HandlerFunc) {
+	group.addRouteWithMiddleware(http.MethodDelete, pattern, handler, mws...)
+}
+
+// Options 注册一条 OPTIONS 路由，可附带只作用于该路由的中间件。
+func (group *RouterGroup) Options(pattern string, handler HandlerFunc, mws ...HandlerFunc) {
+	group.addRouteWithMiddleware(http.MethodOptions, pattern, handler, mws...)
 }
 
 // Use 为本分组添加中间件，作用于匹配该分组前缀的路径。
