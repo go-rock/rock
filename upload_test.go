@@ -418,6 +418,53 @@ func BenchmarkFileUpload(b *testing.B) {
 	os.RemoveAll("./benchmark_uploads")
 }
 
+func TestUploadTextMIME(t *testing.T) {
+	app := New()
+
+	app.Post("/upload/mime", func(c Context) {
+		config := &FileUploadConfig{
+			MaxFileSize:       10 * 1024 * 1024,
+			AllowedExtensions: []string{".txt"},
+			AllowedMimeTypes:  []string{"text/plain"}, // 默认白名单
+			SaveDir:           "./test_uploads",
+		}
+
+		_, err := c.SaveSingleFile("file", config)
+		if err != nil {
+			c.JSON(400, M{"error": err.Error()})
+			return
+		}
+
+		c.JSON(200, M{"success": true})
+	})
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	// 纯文本文件：DetectContentType 返回 "text/plain; charset=utf-8"，
+	// 修复前会被精确比较误拒
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, _ := writer.CreateFormFile("file", "hello.txt")
+	part.Write([]byte("hello world plain text"))
+	writer.Close()
+
+	req, _ := http.NewRequest("POST", server.URL+"/upload/mime", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	resp, err := server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("Failed to upload text file: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		t.Errorf("文本文件 MIME 校验不应拒绝, got %d", resp.StatusCode)
+	}
+
+	os.RemoveAll("./test_uploads")
+}
+
 func TestUploadBodyLimit(t *testing.T) {
 	app := New()
 	app.Post("/upload", func(c Context) {

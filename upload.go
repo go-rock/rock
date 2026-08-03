@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"io"
+	"mime"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -153,6 +154,12 @@ func ValidateMIMEType(fh *multipart.FileHeader, config *FileUploadConfig) error 
 	mimeType, err := GetFileMIMEType(fh)
 	if err != nil {
 		return NewError(ErrBadRequest, "Failed to detect MIME type: %v", err)
+	}
+
+	// http.DetectContentType 可能返回带参数的 MIME 类型（如 "text/plain; charset=utf-8"），
+	// 剥离参数后与白名单精确比较，避免误拒合法的文本类文件
+	if mediaType, _, parseErr := mime.ParseMediaType(mimeType); parseErr == nil {
+		mimeType = mediaType
 	}
 
 	allowed := false

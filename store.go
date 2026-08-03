@@ -31,13 +31,13 @@ func NewStore() *Store {
 	}
 }
 
-// 初始化Store以适配现有代码
-func (s *Store) init() {
-	if s.entries == nil {
-		s.entries = make([]Entry, 0)
+// initLocked 初始化底层数据结构，调用方需持有写锁。
+func (r *Store) initLocked() {
+	if r.entries == nil {
+		r.entries = make([]Entry, 0)
 	}
-	if s.index == nil {
-		s.index = make(map[string]int)
+	if r.index == nil {
+		r.index = make(map[string]int)
 	}
 }
 
@@ -46,9 +46,9 @@ func (r *Store) Set(key string, value interface{}) (Entry, bool) {
 }
 
 func (r *Store) Save(key string, value interface{}, immutable bool) (Entry, bool) {
-	r.init()
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.initLocked()
 
 	// 检查key是否已存在
 	if idx, exists := r.index[key]; exists {
@@ -83,11 +83,10 @@ func (r *Store) Get(key string) interface{} {
 // If not found returns "def".
 // This function checks for immutability as well, the rest don't.
 func (r *Store) GetDefault(key string, def interface{}) interface{} {
-	r.init()
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	v, ok := r.GetEntry(key)
+	v, ok := r.getEntryLocked(key)
 	if !ok || v.ValueRaw == nil {
 		return def
 	}
@@ -130,15 +129,22 @@ func (e Entry) Value() interface{} {
 
 var emptyEntry Entry
 
-// GetEntry returns a pointer to the "Entry" found with the given "key"
-// if nothing found then it returns an empty Entry and false.
-func (r *Store) GetEntry(key string) (Entry, bool) {
-	r.init()
-
+// getEntryLocked 按 key 查找条目，调用方需持有读锁。
+// 对 nil 的 index/entries 读取是安全的（返回零值）。
+func (r *Store) getEntryLocked(key string) (Entry, bool) {
 	// 使用索引快速查找
 	if idx, exists := r.index[key]; exists && idx < len(r.entries) {
 		return r.entries[idx], true
 	}
 
 	return emptyEntry, false
+}
+
+// GetEntry 线程安全地返回 key 对应的条目副本。
+// 如果没有找到则返回空的 Entry 和 false。
+func (r *Store) GetEntry(key string) (Entry, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	return r.getEntryLocked(key)
 }
