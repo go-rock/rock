@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"sort"
 	"sync"
 	"time"
 
@@ -151,15 +152,11 @@ func (app *App) collectMiddlewares(path string) []HandlerFunc {
 		}
 	}
 
-	// 按优先级排序（从低到高）
+	// 按优先级排序（从低到高），用标准库稳定排序替代手写冒泡
 	if len(middlewareList) > 1 {
-		for i := 0; i < len(middlewareList); i++ {
-			for j := i + 1; j < len(middlewareList); j++ {
-				if middlewareList[i].priority > middlewareList[j].priority {
-					middlewareList[i], middlewareList[j] = middlewareList[j], middlewareList[i]
-				}
-			}
-		}
+		sort.SliceStable(middlewareList, func(i, j int) bool {
+			return middlewareList[i].priority < middlewareList[j].priority
+		})
 	}
 
 	// 提取排序后的处理器

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/go-playground/validator/v10"
 )
 
 // ErrorCode 定义常见的错误代码
@@ -82,6 +84,14 @@ func WriteError(c Context, statusCode int, err error) {
 			Detail:  e.Detail,
 		}
 	case *ValidationError:
+		httpErr = HTTPError{
+			Code:    int(ErrBadRequest),
+			Message: "Validation failed",
+			Detail:  e.Error(),
+		}
+	case validator.ValidationErrors:
+		// binding.Validate（go-playground/validator）返回的错误，
+		// 否则会落入 default 被误报为 500
 		httpErr = HTTPError{
 			Code:    int(ErrBadRequest),
 			Message: "Validation failed",

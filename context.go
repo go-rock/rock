@@ -244,6 +244,7 @@ func (c *Ctx) writeHeader() {
 
 func (c *Ctx) Fail(code int, err string) {
 	c.index = len(c.handlers)
+	c.aborted = true
 	c.JSON(code, H{"message": err})
 }
 
@@ -303,11 +304,11 @@ func (c *Ctx) Query(key string) string {
 }
 
 func (c *Ctx) GetQuery(name string) (string, bool) {
-	if val := c.Query(name); val != "" {
-		return val, true
-	} else {
+	values, exists := c.request.URL.Query()[name]
+	if !exists || len(values) == 0 {
 		return "", false
 	}
+	return values[0], true
 }
 
 func (c *Ctx) QueryInt(key string) int {

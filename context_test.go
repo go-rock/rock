@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/go-rock/rock/binding"
 )
 
 func TestContextBasic(t *testing.T) {
@@ -664,6 +666,71 @@ func TestClientIPTrustProxy(t *testing.T) {
 	resp2.Body.Close()
 	if string(body2) != "203.0.113.7" {
 		t.Errorf("开启 TrustProxy 后应使用 X-Forwarded-For, got %q", body2)
+	}
+}
+
+func TestGetQueryPresence(t *testing.T) {
+	app := New()
+	app.Get("/q", func(c Context) {
+		val, ok := c.GetQuery("foo")
+		c.JSON(200, M{"val": val, "ok": ok})
+	})
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	// ?foo= 应视为"存在但为空"，而不是不存在
+	resp, err := server.Client().Get(server.URL + "/q?foo=")
+	if err != nil {
+		t.Fatalf("Failed to GET /q: %v", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	var result struct {
+		Val string `json:"val"`
+		Ok  bool   `json:"ok"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+	if !result.Ok || result.Val != "" {
+		t.Errorf("?foo= 应返回 (\"\", true), got (val=%q, ok=%v)", result.Val, result.Ok)
+	}
+}
+
+func TestWriteErrorValidation(t *testing.T) {
+	app := New()
+	app.Get("/validate", func(c Context) {
+		req := struct {
+			Name string `binding:"required"`
+		}{}
+		// Name 为空 → binding.Validate 返回 validator.ValidationErrors
+		if err := binding.Validate(&req); err != nil {
+			WriteError(c, 400, err)
+			return
+		}
+		c.JSON(200, M{"ok": true})
+	})
+
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	resp, err := server.Client().Get(server.URL + "/validate")
+	if err != nil {
+		t.Fatalf("Failed to GET /validate: %v", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode != 400 {
+		t.Errorf("校验错误应返回 400, got %d", resp.StatusCode)
+	}
+	if !strings.Contains(string(body), "Validation failed") {
+		t.Errorf("应返回 Validation failed, got %s", body)
+	}
+	if strings.Contains(string(body), "Internal Server Error") {
+		t.Error("校验错误不应被误报为 Internal Server Error")
 	}
 }
 
